@@ -4,10 +4,9 @@
   "description": "Node.js API for CRUD operations on food recipes, with JWT auth and MongoDB.",
   "main": "index.js",
   "scripts": {
-    "dev":   "nodemon src/index.js",
+    "dev": "nodemon src/index.js",
     "start": "node src/index.js",
-    "lint": "eslint .",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "lint": "eslint ."
   },
   "repository": {
     "type": "git",
@@ -28,7 +27,8 @@
   "dependencies": {
     "bcrypt": "^6.0.0",
     "dotenv": "^17.1.0",
-    "express": "^5.1.0",
+    "express": "^4.21.2",
+    "express-list-endpoints": "^7.1.1",
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.16.2"
   },
