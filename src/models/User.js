@@ -18,6 +18,27 @@ const userSchema = new mongoose.Schema(
       type: String,
       required: true
     }
+    //which recipes this user has liked
+    // likedRecipes: [
+    //   {
+    //     type: mongoose.Schema.Types.ObjectId,
+    //     ref: 'Recipe'
+    //   }
+    // ],
+    // //which recipes this user has rated (and their rating)
+    // ratedRecipes: [
+    //   {
+    //     recipe: {
+    //       type: mongoose.Schema.Types.ObjectId,
+    //       ref: 'Recipe'
+    //     },
+    //     value: {
+    //       type: Number,
+    //       min: 1,
+    //       max: 5
+    //     }
+    //   }
+    // ]
   },
   {
     timestamps: true

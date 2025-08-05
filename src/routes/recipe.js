@@ -1,185 +1,136 @@
-// routes/recipes.js
-
 const express  = require('express');
 const mongoose = require('mongoose');
 const router   = express.Router();
 const auth     = require('../middleware/auth');
-const Recipe   = require('../models/Recipe');
+const {
+  createRecipe,
+  getRecipes,
+  getRecipeById,
+  updateRecipe,
+  deleteRecipe,
+  rateRecipe,
+  likeRecipe
+} = require('../controllers/recipeController');
+const { addComment, getAllComments, updateComment, deleteComment } = require('../controllers/commentController');
+
+/* ──────────────────────────────────────────── */
+/*                  HELPERS                     */
+/* ──────────────────────────────────────────── */
+
+// Validate any route param as a Mongo ObjectId
+function validateObjectId(paramName) {
+  return (req, res, next) => {
+    if (!mongoose.Types.ObjectId.isValid(req.params[paramName])) {
+      return res.status(400).json({ message: `Invalid ${paramName}` });
+    }
+    next();
+  };
+}
+
+// Ensure POST body has non-empty "content"
+function validateCommentContent(req, res, next) {
+  const { content } = req.body;
+  if (!content || !content.trim()) {
+    return res.status(400).json({ message: 'Comment content is required' });
+  }
+  next();
+}
+
+
+/* ──────────────────────────────────────────── */
+/*               RECIPE ROUTES                  */
+/* ──────────────────────────────────────────── */
 
 /**
  * GET /api/recipes
- * Public – list all recipes
+ * Public – list all recipes with optional filters & pagination
+ * Query params: title, ingredient, page, limit
  */
-router.get('/', async (req, res) => {
-  try {
-    const recipes = await Recipe.find().sort({ createdAt: -1 });
-    res.json(recipes);
-  } catch (err) {
-    console.error('GET /recipes error:', err);
-    res.status(500).json({ message: 'Server error fetching recipes' });
-  }
-});
-
+router.get('/', getRecipes);
 /**
- * GET /api/recipes/search/name
- * Public – search by title substring
- * Query: ?title=...
+ * GET /api/recipes/:id
+ * Public – fetch a single recipe
  */
-router.get('/search/name', async (req, res) => {
-  const { title } = req.query;
-  if (!title) {
-    return res.status(400).json({ message: 'Missing title query parameter' });
-  }
-
-  try {
-    const recipes = await Recipe.find({
-      title: { $regex: title, $options: 'i' }
-    });
-    res.json(recipes);
-  } catch (err) {
-    console.error('GET /recipes/search/name error:', err);
-    res.status(500).json({ message: 'Server error searching by name' });
-  }
-});
-
-/**
- * GET /api/recipes/search/ingredients
- * Public – search by ingredients (AND-style)
- * Query: ?ingredients=egg,flour,sugar
- */
-router.get('/search/ingredients', async (req, res) => {
-  const { ingredients } = req.query;
-  if (!ingredients) {
-    return res.status(400).json({ message: 'Missing ingredients query parameter' });
-  }
-
-  const terms = ingredients
-    .split(',')
-    .map(str => str.trim())
-    .filter(Boolean);
-
-  const filter = {
-    $and: terms.map(term => ({
-      ingredients: {
-        $elemMatch: { name: { $regex: term, $options: 'i' } }
-      }
-    }))
-  };
-
-  try {
-    const recipes = await Recipe.find(filter);
-    res.json(recipes);
-  } catch (err) {
-    console.error('GET /recipes/search/ingredients error:', err);
-    res.status(500).json({ message: 'Server error searching by ingredients' });
-  }
-});
-
+router.get('/:id', validateObjectId('id'), getRecipeById);
 /**
  * POST /api/recipes
  * Private – create a new recipe
  */
-router.post('/', auth, async (req, res) => {
-  try {
-    const { title, description, imageUrl, ingredients, instructions } = req.body;
-    const imageUrls = imageUrl ? [{ url: imageUrl }] : [];
-
-    const recipe = new Recipe({
-      title,
-      description,
-      imageUrls,
-      ingredients,
-      instructions,
-      author: req.user
-    });
-
-    await recipe.save();
-    res.status(201).json(recipe);
-  } catch (err) {
-    console.error('POST /recipes error:', err);
-    if (err.name === 'ValidationError') {
-      return res.status(400).json({ message: err.message });
-    }
-    res.status(500).json({ message: 'Server error creating recipe' });
-  }
-});
-
+router.post('/', auth, createRecipe);
 /**
  * PUT /api/recipes/:id
  * Private – update a recipe (author only)
  */
-router.put('/:id', auth, async (req, res) => {
-  const { id } = req.params;
-  if (!mongoose.Types.ObjectId.isValid(id)) {
-    return res.status(400).json({ message: 'Invalid recipe ID' });
-  }
-
-  let {
-    title,
-    description,
-    imageUrl,
-    ingredients,
-    instructions
-  } = req.body;
-
-  // ─── FIX: coerce an array into a newline-separated string ───
-  if (Array.isArray(instructions)) {
-    instructions = instructions.join('\n');
-  }
-
-  const updates = { title, description, ingredients, instructions };
-
-  if (typeof imageUrl !== 'undefined') {
-    updates.imageUrls = imageUrl
-      ? [{ url: imageUrl }]
-      : [];
-  }
-
-  try {
-    const recipe = await Recipe.findOneAndUpdate(
-      { _id: id, author: req.user },
-      updates,
-      { new: true, runValidators: true }
-    );
-
-    if (!recipe) {
-      return res
-        .status(404)
-        .json({ message: 'Recipe not found or you’re not the author' });
-    }
-
-    res.json(recipe);
-  } catch (err) {
-    console.error(`PUT /recipes/${id} error:`, err);
-    if (err.name === 'ValidationError') {
-      return res.status(400).json({ message: err.message });
-    }
-    res.status(500).json({ message: 'Server error updating recipe' });
-  }
-});
-
+router.put('/:id', auth, validateObjectId('id'), updateRecipe);
 /**
  * DELETE /api/recipes/:id
  * Private – delete a recipe (author only)
  */
-router.delete('/:id', auth, async (req, res) => {
-  const { id } = req.params;
-  if (!mongoose.Types.ObjectId.isValid(id)) {
-    return res.status(400).json({ message: 'Invalid recipe ID' });
-  }
+router.delete('/:id', auth, validateObjectId('id'), deleteRecipe);
 
-  try {
-    const recipe = await Recipe.findOneAndDelete({ _id: id, author: req.user });
-    if (!recipe) {
-      return res
-        .status(404)
-        .json({ message: 'Recipe not found or you’re not the author' });
-    }
-    res.json({ message: 'Recipe successfully deleted' });
-  } catch (err) {
-    console.error(`DELETE /recipes/${id} error:`, err);
-    res.status(500).json({ message: 'Server error deleting recipe' });
-  }
-});
+// ── Rating & Like Endpoints ──────────────────
+
+/**
+ * POST /api/recipes/:id/rate
+ * Private – vote a 1–5 rating, returns { ratingCount, averageRating }
+ */
+router.post('/:id/rate', auth, validateObjectId('id'), rateRecipe);
+
+/**
+ * POST /api/recipes/:id/like
+ * Private – toggle a like, returns { liked, likeCount }
+ */
+router.post('/:id/like', auth, validateObjectId('id'), likeRecipe);
+
+
+/* ──────────────────────────────────────────── */
+/*               COMMENT ROUTES                 */
+/* ──────────────────────────────────────────── */
+
+/**
+ * GET   /api/recipes/:recipeId/comments
+ * Public – list comments for a recipe
+ */
+router.get(
+  '/:recipeId/comments',
+  validateObjectId('recipeId'),
+  getAllComments
+);
+
+/**
+ * POST  /api/recipes/:recipeId/comments
+ * Private – add a comment
+ */
+router.post(
+  '/:recipeId/comments',
+  auth,
+  validateObjectId('recipeId'),
+  validateCommentContent,
+  addComment
+);
+
+/**
+ * PUT /api/recipes/:recipeId/comments/:commentId
+ * Private - update comment
+ */
+router.put(
+  '/:recipeId/comments/:commentId',
+  auth,
+  validateObjectId('recipeId'),
+  validateCommentContent,
+  updateComment
+);
+
+/**
+ * DELETE /api/recipes/:recipeId/comments/:commentId
+ * Private – delete a comment
+ */
+router.delete(
+  '/:recipeId/comments/:commentId',
+  auth,
+  validateObjectId('recipeId'),
+  validateObjectId('commentId'),
+  deleteComment
+);
 
 module.exports = router;

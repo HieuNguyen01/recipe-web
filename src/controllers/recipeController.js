@@ -1,37 +1,73 @@
-// controllers/recipeControllers.js
-
+const mongoose = require('mongoose');
+const { ObjectId } = mongoose.mongo;
 const Recipe = require('../models/Recipe');
+const Rating = require('../models/Rating');
+const Like   = require('../models/Like');
+
+// Inline helper to validate & clean up an array of step strings
+function normalizeSteps(steps) {
+  if (!Array.isArray(steps)) {
+    throw new Error('Instructions must be an array of step strings');
+  }
+
+  const clean = steps
+    .map(s => {
+      if (typeof s !== 'string') {
+        throw new Error('Each step must be a string');
+      }
+      return s.trim();
+    })
+    .filter(Boolean);
+
+  if (clean.length === 0) {
+    throw new Error('At least one instruction step is required');
+  }
+  return clean;
+}
 
 // CREATE a new recipe
 exports.createRecipe = async (req, res) => {
   try {
-    const { title, description, imageUrl, ingredients, instructions } = req.body;
-    const imageUrls = imageUrl ? [{ url: imageUrl }] : [];
-
-    const recipe = new Recipe({
+    const {
       title,
       description,
-      imageUrls,
+      cookingTime,
       ingredients,
       instructions,
-      author: req.user._id
+      imageUrl
+    } = req.body;
+
+    const cleanInstructions = normalizeSteps(instructions);
+
+    const imageUrls = imageUrl ? [{ url: imageUrl }] : [];
+
+    const recipe = await Recipe.create({
+      title,
+      description,
+      cookingTime,
+      ingredients,
+      instructions: cleanInstructions,
+      imageUrls,
+      author: req.user.id
     });
 
-    await recipe.save();
-    res.status(201).json(recipe);
+    return res.status(201).json(recipe);
   } catch (err) {
     console.error('Error creating recipe:', err);
-    if (err.name === 'ValidationError') {
+    if (err.message.includes('Instructions must be') ||
+        err.message.includes('Each step') ||
+        err.message.includes('At least one') ||
+        err.name === 'ValidationError') {
       return res.status(400).json({ message: err.message });
     }
-    res.status(500).json({ message: 'Server error creating recipe' });
+    return res.status(500).json({ message: 'Server error creating recipe' });
   }
 };
 
-// GET all recipes (with optional title/ingredient regex filters)
+// GET all recipes with optional title/ingredient filters + pagination
 exports.getRecipes = async (req, res) => {
   try {
-    const { title, ingredient } = req.query;
+    const { title, ingredient, page = 1, limit = 10 } = req.query;
     const filter = {};
 
     if (title) {
@@ -41,8 +77,28 @@ exports.getRecipes = async (req, res) => {
       filter['ingredients.name'] = { $regex: ingredient, $options: 'i' };
     }
 
-    const recipes = await Recipe.find(filter);
-    res.json(recipes);
+    const pageNum = parseInt(page, 10);
+    const limitNum = parseInt(limit, 10);
+    const skip = (pageNum - 1) * limitNum;
+
+    const total = await Recipe.countDocuments(filter);
+    const recipes = await Recipe.find(filter)
+      .collation({ locale: 'vi', strength: 1 })
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limitNum);
+
+    const totalPages = Math.ceil(total / limitNum);
+
+    res.json({
+      recipes,
+      pagination: {
+        total,
+        page: pageNum,
+        limit: limitNum,
+        totalPages
+      }
+    });
   } catch (err) {
     console.error('Error fetching recipes:', err);
     res.status(500).json({ message: 'Server error fetching recipes' });
@@ -66,15 +122,26 @@ exports.getRecipeById = async (req, res) => {
 // UPDATE a recipe (only by its author)
 exports.updateRecipe = async (req, res) => {
   try {
-    const { title, description, imageUrl, ingredients, instructions } = req.body;
-    const updates = { title, description, ingredients, instructions };
+    const {
+      title,
+      description,
+      cookingTime,
+      ingredients,
+      instructions,
+      imageUrl
+    } = req.body;
 
+    let updates = { title, description, cookingTime, ingredients };
+
+    if (typeof instructions !== 'undefined') {
+      updates.instructions = normalizeSteps(instructions);
+    }
     if (typeof imageUrl !== 'undefined') {
       updates.imageUrls = imageUrl ? [{ url: imageUrl }] : [];
     }
 
     const recipe = await Recipe.findOneAndUpdate(
-      { _id: req.params.id, author: req.user._id },
+      { _id: req.params.id, author: req.user.id },
       updates,
       { new: true, runValidators: true }
     );
@@ -84,13 +151,16 @@ exports.updateRecipe = async (req, res) => {
         .status(404)
         .json({ message: 'Recipe not found or you are unauthorized' });
     }
-    res.json(recipe);
+    return res.json(recipe);
   } catch (err) {
     console.error(`Error updating recipe ${req.params.id}:`, err);
-    if (err.name === 'ValidationError') {
+    if (err.message.includes('Instructions must be') ||
+        err.message.includes('Each step') ||
+        err.message.includes('At least one') ||
+        err.name === 'ValidationError') {
       return res.status(400).json({ message: err.message });
     }
-    res.status(500).json({ message: 'Server error updating recipe' });
+    return res.status(500).json({ message: 'Server error updating recipe' });
   }
 };
 
@@ -99,7 +169,7 @@ exports.deleteRecipe = async (req, res) => {
   try {
     const recipe = await Recipe.findOneAndDelete({
       _id: req.params.id,
-      author: req.user._id
+      author: req.user.id
     });
 
     if (!recipe) {
@@ -111,5 +181,91 @@ exports.deleteRecipe = async (req, res) => {
   } catch (err) {
     console.error(`Error deleting recipe ${req.params.id}:`, err);
     res.status(500).json({ message: 'Server error deleting recipe' });
+  }
+};
+
+/**
+ * POST  /api/recipes/:id/rate
+ * Private – upsert a rating (1–5), recalc avg & count
+ */
+exports.rateRecipe = async (req, res) => {
+  const { id: recipeId } = req.params;
+  const { value }        = req.body;
+
+  if (typeof value !== 'number' || value < 1 || value > 5) {
+    return res.status(400).json({ message: 'Rating must be a number between 1 and 5' });
+  }
+
+  try {
+    // Upsert the user’s rating
+    await Rating.findOneAndUpdate(
+      { user: req.user.id, recipe: new ObjectId(recipeId) },
+      { value },
+      { upsert: true, new: true, setDefaultsOnInsert: true }
+    );
+
+    // Recalculate stats
+    const agg = await Rating.aggregate([
+      { $match: { recipe: new ObjectId(recipeId) } },
+      {
+        $group: {
+          _id: '$recipe',
+          count: { $sum: 1 },
+          avg:   { $avg: '$value' }
+        }
+      }
+    ]);
+
+    const { count = 0, avg = 0 } = agg[0] || {};
+
+    // Update Recipe doc
+    await Recipe.findByIdAndUpdate(recipeId, {
+      ratingCount: count,
+      averageRating: avg
+    });
+
+    return res.json({
+      ratingCount: count,
+      averageRating: avg
+    });
+  } catch (err) {
+    console.error('rateRecipe error:', err);
+    return res.status(500).json({ message: 'Server error rating recipe' });
+  }
+};
+
+/**
+ * POST  /api/recipes/:id/like
+ * Private – toggle a like, recalc total likes
+ */
+exports.likeRecipe = async (req, res) => {
+  const { id: recipeId } = req.params;
+
+  try {
+    // Try to remove existing like
+    const removed = await Like.findOneAndDelete({
+      user: req.user.id,
+      recipe: recipeId
+    });
+
+    let liked;
+    if (removed) {
+      liked = false;
+    } else {
+      // Create a new like
+      await Like.create({ user: req.user.id, recipe: recipeId });
+      liked = true;
+    }
+
+    // Count total likes
+    const totalLikes = await Like.countDocuments({ recipe: recipeId });
+
+    // Update Recipe doc
+    await Recipe.findByIdAndUpdate(recipeId, { likeCount: totalLikes });
+
+    return res.json({ liked, likeCount: totalLikes });
+  } catch (err) {
+    console.error('likeRecipe error:', err);
+    return res.status(500).json({ message: 'Server error toggling like' });
   }
 };

@@ -1,14 +1,14 @@
-const express = require('express');
-const router = express.Router();
-const {
-  getAllUsers,
-  getUserById
-} = require('../controllers/userControllers');
+// routes/users.js
 
-// GET /api/users
-router.get('/', getAllUsers);
+const express      = require('express');
+const auth = require('../middleware/auth');
+const ctrl         = require('../controllers/userController');
+const router       = express.Router();
 
-// GET /api/users/:id
-router.get('/:id', getUserById);
+router.get('/',             ctrl.getAllUsers);
+router.get('/me',           auth, ctrl.getMe);
+router.get('/:id/likes',    ctrl.getLikes);
+router.get('/:id/comments', ctrl.getComments);
+router.get('/:id',          ctrl.getUserById);
 
 module.exports = router;
