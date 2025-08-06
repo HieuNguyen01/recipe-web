@@ -1,6 +1,7 @@
 require('dotenv').config();
 
 const express       = require('express');
+const cors = require("cors");
 const listEndpoints = require('express-list-endpoints');
 const connectDB     = require('./config/db');
 const authRoutes    = require('./routes/auth');
@@ -10,6 +11,7 @@ const usersRoutes   = require('./routes/user');
 
 const app = express();
 app.use(express.json());
+app.use(cors());
 
 // Root health check
 app.get('/', (req, res) => res.send('🍔 Recipe API is running'));
@@ -29,7 +31,7 @@ app.use((err, req, res, next) => {
 if (require.main === module) {
   connectDB()
     .then(() => {
-      const PORT = process.env.PORT || 3000;
+      const PORT = process.env.PORT || 5500;
       app.listen(PORT, () => {
         console.log(`Server listening on port ${PORT}`);
         console.table(

@@ -34,21 +34,17 @@ exports.createRecipe = async (req, res) => {
       cookingTime,
       ingredients,
       instructions,
-      imageUrl
+      image
     } = req.body;
-
     const cleanInstructions = normalizeSteps(instructions);
-
-    const imageUrls = imageUrl ? [{ url: imageUrl }] : [];
-
     const recipe = await Recipe.create({
       title,
       description,
       cookingTime,
       ingredients,
       instructions: cleanInstructions,
-      imageUrls,
-      author: req.user.id
+      image,
+      authorId: req.user.id
     });
 
     return res.status(201).json(recipe);
@@ -77,26 +73,55 @@ exports.getRecipes = async (req, res) => {
       filter['ingredients.name'] = { $regex: ingredient, $options: 'i' };
     }
 
-    const pageNum = parseInt(page, 10);
+    const pageNum = parseInt(page, 10) ;
     const limitNum = parseInt(limit, 10);
     const skip = (pageNum - 1) * limitNum;
 
-    const total = await Recipe.countDocuments(filter);
-    const recipes = await Recipe.find(filter)
+    const docs = await Recipe.find(filter)
+      .populate("authorId", "name")
       .collation({ locale: 'vi', strength: 1 })
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limitNum);
-
+    //total pages
+    const total = await Recipe.countDocuments(filter);
     const totalPages = Math.ceil(total / limitNum);
 
+    const currentUserId = req.user?._id.toString();
+    const recipes = docs.map(doc => {
+      const r = doc.toObject();    // gives you everything from Mongo
+      // console.log(doc._id.toString());
+      return {
+        // Core listing fields (HomePage)
+        id: r.id,
+        title: r.title,
+        image: r.image,
+        author: r.authorId?.name || 'Unknown author',
+        rating: r.averageRating,
+
+        // Only mark editable if the logged-in user owns recipes on the list for triggering Edit button
+        editable:     Boolean(currentUserId) && r.authorId?._id.toString() === currentUserId,
+
+        // fields for later uses)
+        description: r.description,
+        cookingTime: r.cookingTime,
+        ingredients: r.ingredients,
+        instructions: r.instructions,
+        likeCount: r.likeCount,
+        ratingCount: r.ratingCount,
+        comments: r.comments,
+        createdAt: r.createdAt,
+        updatedAt: r.updatedAt,
+      };
+    });
+
     res.json({
-      recipes,
-      pagination: {
-        total,
-        page: pageNum,
-        limit: limitNum,
-        totalPages
+        recipes,
+        pagination: {
+          total,
+          page: pageNum,
+          limit: limitNum,
+          totalPages
       }
     });
   } catch (err) {
@@ -128,7 +153,7 @@ exports.updateRecipe = async (req, res) => {
       cookingTime,
       ingredients,
       instructions,
-      imageUrl
+      image
     } = req.body;
 
     let updates = { title, description, cookingTime, ingredients };
@@ -136,12 +161,12 @@ exports.updateRecipe = async (req, res) => {
     if (typeof instructions !== 'undefined') {
       updates.instructions = normalizeSteps(instructions);
     }
-    if (typeof imageUrl !== 'undefined') {
-      updates.imageUrls = imageUrl ? [{ url: imageUrl }] : [];
+    if (typeof image !== 'undefined') {
+      updates.image = image;
     }
 
     const recipe = await Recipe.findOneAndUpdate(
-      { _id: req.params.id, author: req.user.id },
+      { _id: req.params.id, authorId: req.user.id },
       updates,
       { new: true, runValidators: true }
     );
@@ -169,7 +194,7 @@ exports.deleteRecipe = async (req, res) => {
   try {
     const recipe = await Recipe.findOneAndDelete({
       _id: req.params.id,
-      author: req.user.id
+      authorId: req.user.id
     });
 
     if (!recipe) {

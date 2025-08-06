@@ -1,39 +1,47 @@
 {
-  "name": "recipe-api",
+  "name": "recipe-web",
   "version": "1.0.0",
-  "description": "Node.js API for CRUD operations on food recipes, with JWT auth and MongoDB.",
-  "main": "index.js",
+  "private": true,
+  "description": "Monorepo for Recipe API (Node/Express/MongoDB/JWT) and Recipe UI (React/Material Kit)",
+  "workspaces": [
+    "recipe-api",
+    "recipe-ui"
+  ],
   "scripts": {
-    "dev": "nodemon src/index.js",
-    "start": "node src/index.js",
-    "lint": "eslint ."
+    "bootstrap": "npm install",
+    "clean": "rimraf node_modules",
+    "start:api": "npm run dev --workspace=recipe-api",
+    "start:ui": "npm start --workspace=recipe-ui",
+    "start": "concurrently \"npm run start:api\" \"npm run start:ui\"",
+    "lint:api": "eslint \"recipe-api/**/*.js\"",
+    "lint:ui": "npm run lint --workspace=recipe-ui",
+    "lint": "npm run lint:api && npm run lint:ui",
+    "test:api": "npm test --workspace=recipe-api",
+    "test:ui": "npm test --workspace=recipe-ui",
+    "test": "npm run test:api && npm run test:ui"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/HieuNguyen01/recipe-api.git"
+    "url": "https://github.com/HieuNguyen01/recipe-web.git"
   },
   "keywords": [
+    "monorepo",
     "nodejs",
     "express",
     "mongodb",
-    "jwt"
+    "jwt",
+    "react",
+    "material-ui"
   ],
   "author": "HieuNguyen",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/HieuNguyen01/recipe-api/issues"
+    "url": "https://github.com/HieuNguyen01/recipe-web/issues"
   },
-  "homepage": "https://github.com/HieuNguyen01/recipe-api#readme",
-  "dependencies": {
-    "bcrypt": "^6.0.0",
-    "dotenv": "^17.1.0",
-    "express": "^4.21.2",
-    "express-list-endpoints": "^7.1.1",
-    "jsonwebtoken": "^9.0.2",
-    "mongoose": "^8.16.2"
-  },
+  "homepage": "https://github.com/HieuNguyen01/recipe-web#readme",
   "devDependencies": {
-    "eslint": "^9.30.1",
-    "nodemon": "^3.1.10"
+    "concurrently": "^8.0.0",
+    "prettier": "^2.8.0",
+    "rimraf": "^5.0.0"
   }
 }

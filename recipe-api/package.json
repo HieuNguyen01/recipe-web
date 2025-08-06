@@ -1,31 +1,16 @@
 {
   "name": "recipe-api",
   "version": "1.0.0",
-  "description": "Node.js API for CRUD operations on food recipes, with JWT auth and MongoDB.",
-  "main": "index.js",
+  "private": true,
+  "main": "src/index.js",
   "scripts": {
     "dev": "nodemon src/index.js",
     "start": "node src/index.js",
     "lint": "eslint ."
   },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/HieuNguyen01/recipe-api.git"
-  },
-  "keywords": [
-    "nodejs",
-    "express",
-    "mongodb",
-    "jwt"
-  ],
-  "author": "HieuNguyen",
-  "license": "MIT",
-  "bugs": {
-    "url": "https://github.com/HieuNguyen01/recipe-api/issues"
-  },
-  "homepage": "https://github.com/HieuNguyen01/recipe-api#readme",
   "dependencies": {
     "bcrypt": "^6.0.0",
+    "cors": "^2.8.5",
     "dotenv": "^17.1.0",
     "express": "^4.21.2",
     "express-list-endpoints": "^7.1.1",

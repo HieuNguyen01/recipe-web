@@ -1,59 +1,33 @@
+// models/Recipe.js
 const mongoose = require('mongoose');
-const { Schema } = mongoose;
 
-const URL_REGEX = /^https?:\/\/.+\..+$/;
-const validUnits = ['g', 'kg', 'ml', 'l', 'tsp', 'tbsp', 'cup', 'piece'];
+const URL_REGEX = /^(https?:\/\/)([\w\-_]+(\.[\w\-_]+)+)([\w\-\.,@?^=%&:/~\+#]*[\w\-\@?^=%&/~\+#])?$/i;
+const validUnits = [ 'g', 'kg', 'ml', 'l', 'tsp', 'tbsp', 'cup', 'piece' ];
 
-const ingredientSchema = new Schema({
-  name: {
-    type: String,
-    required: true,
-    trim: true
-  },
-  amount: {
-    type: Number,
-    required: true,
-    min: [0.01, 'Amount must be a positive number']
-  },
-  unit: {
-  type: String,
-  required: true,
-  enum: validUnits
-}
-}, { _id: true });
+// Ingredient sub‐document (no own _id)
+const ingredientSchema = new mongoose.Schema({
+  name:   { type: String, required: true, trim: true },
+  amount: { type: Number, required: true, min: [0.01, 'Amount must be a positive number'] },
+  unit:   { type: String, required: true, enum: validUnits }
+}, { _id: false });
 
-const recipeSchema = new Schema({
-  title: {
-    type: String,
-    required: true,
-    trim: true
+// Comment sub‐document (no own _id)
+const commentSchema = new mongoose.Schema({
+  commenterId: {
+    type: mongoose.Types.ObjectId,
+    ref: 'User',
+    required: true
   },
-  description: {
-    type: String,
-    trim: true
-  },
-  cookingTime: {
-    type: Number,
-    required: true,
-    min: [1, 'Cooking time must be at least 1 minute']
-  },
-  ingredients: {
-    type: [ingredientSchema],
-    validate: [
-      {
-        validator: arr => arr.length > 0,
-        message: 'At least one ingredient is required'
-      },
-      {
-        validator: arr => {
-          const names = arr.map(i => i.name.toLowerCase());
-          return new Set(names).size === names.length;
-        },
-        message: 'Duplicate ingredient names are not allowed'
-      }
-    ]
-  },
-  instructions: {
+  text: { type: String, required: true }
+}, { _id: false });
+
+// Main Recipe schema
+const recipeSchema = new mongoose.Schema({
+  title:         { type: String, required: true },
+  description:   { type: String, trim: true },
+  cookingTime:   { type: Number, required: true, min: [1, 'Cooking time must be at least 1 minute'] },
+  ingredients:   [ ingredientSchema ],
+  instructions:  {
     type: [String],
     default: [],
     validate: {
@@ -61,52 +35,29 @@ const recipeSchema = new Schema({
       message: 'Each instruction must be a nonempty string.'
     }
   },
-  imageUrls: {
-    type: [
-      {
-        url: {
-          type: String,
-          required: true,
-          trim: true,
-          match: [URL_REGEX, 'Invalid URL format']
-        }
-      }
-    ],
-    default: [],
-    // Allow only one image URL, basic format validation
+  image: {
+    type: String,
     validate: {
-      validator: arr => arr.length <= 1,
-      message: 'You can only add one image'
+      validator: url => URL_REGEX.test(url),
+      message: props => `${props.value} is not a valid URL`
     }
   },
-  author: {
-    type: Schema.Types.ObjectId,
-    ref: 'User',
-    required: true
-  },
-  averageRating: {
-    type: Number,
-    default: 0,
-    min: 0,
-    max: 5
-  },
-  ratingCount: {
-    type: Number,
-    default: 0,
-    min: 0
-  },
-  likeCount: {
-    type: Number,
-    default: 0,
-    min: 0
-  }
-},
-{
-  timestamps: true
+  authorId:       { type: mongoose.Types.ObjectId, ref: 'User', required: true },
+  averageRating:  { type: Number, default: 0, min: 0, max: 5 },
+  ratingCount:    { type: Number, default: 0, min: 0 },
+  likeCount:      { type: Number, default: 0, min: 0 },
+  comments:       [ commentSchema ],
+  likes:          [ { type: mongoose.Types.ObjectId, ref: 'User' } ]
+}, {
+  timestamps: true,
+  toJSON:    { virtuals: true },
+  toObject:  { virtuals: true }
 });
 
-// Indexes for faster lookups
-recipeSchema.index({ title: 1 });
-recipeSchema.index({ 'ingredients.name': 1 });
+// Expose `id` as a hex‐string virtual (for lean queries with { virtuals: true })
+recipeSchema.virtual('id').get(function() {
+  return this._id.toHexString();
+});
 
 module.exports = mongoose.model('Recipe', recipeSchema);
+module.exports.validUnits = validUnits;

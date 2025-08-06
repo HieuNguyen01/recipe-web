@@ -11,6 +11,7 @@ const {
   rateRecipe,
   likeRecipe
 } = require('../controllers/recipeController');
+const optionalAuth  = require('../middleware/optionalAuth');
 const { addComment, getAllComments, updateComment, deleteComment } = require('../controllers/commentController');
 
 /* ──────────────────────────────────────────── */
@@ -46,7 +47,8 @@ function validateCommentContent(req, res, next) {
  * Public – list all recipes with optional filters & pagination
  * Query params: title, ingredient, page, limit
  */
-router.get('/', getRecipes);
+//GET /api/recipe will run optionalAuth **before** getRecipes
+router.get('/', optionalAuth, getRecipes);
 /**
  * GET /api/recipes/:id
  * Public – fetch a single recipe
