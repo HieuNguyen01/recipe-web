@@ -22,13 +22,14 @@ import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { ThemeProvider } from "@mui/material/styles";
 import CssBaseline from "@mui/material/CssBaseline";
 
-// Material Kit 2 React themes
+// Material Kit 2 React themes & routes
 import theme from "assets/theme";
 import Presentation from "layouts/pages/presentation";
-import HomePage from "pages/HomePage";
-
-// Material Kit 2 React routes
 import routes from "routes";
+
+// Pages
+import HomePage from "pages/HomePage";
+import RecipePage from "pages/RecipePage";
 
 export default function App() {
   const { pathname } = useLocation();
@@ -58,6 +59,7 @@ export default function App() {
       <Routes>
         {getRoutes(routes)}
         <Route path="/" element={<HomePage />} />
+        <Route path="/recipe/:id" element={<RecipePage />} />
         <Route path="/presentation" element={<Presentation />} />
         {/* <Route path="*" element={<Navigate to="/presentation" />} /> */}
       </Routes>

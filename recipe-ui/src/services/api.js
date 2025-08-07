@@ -31,6 +31,11 @@ export function getRecipes({ page = 1, limit = 3, title, ingredient } = {}) {
   return request("get", "/recipe", null, { params });
 }
 
+// fetch single recipe by id
+export function getRecipeById(id) {
+  return api.get(`/recipe/${id}`).then((res) => res.data);
+}
+
 export function register(data) {
   return request("post", "/auth/register", data);
 }

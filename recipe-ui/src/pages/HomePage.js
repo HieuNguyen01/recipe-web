@@ -3,7 +3,8 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { styled } from "@mui/material/styles";
-import {Container,
+import {
+  Container,
   Grid,
   Card,
   CardMedia,
@@ -41,24 +42,24 @@ export default function HomePage() {
   const [searchParams, setSearchParams] = useSearchParams();
 
   // Read from the URL
-  const pageParam      = parseInt(searchParams.get("page")    || "1",  10);
-  const titleParam     = searchParams.get("title")            || "";
-  const ingredientParam= searchParams.get("ingredient")       || "";
+  const pageParam = parseInt(searchParams.get("page") || "1", 10);
+  const titleParam = searchParams.get("title") || "";
+  const ingredientParam = searchParams.get("ingredient") || "";
   const limit = 3;
 
   // recipes + pagination
-  const [recipes, setRecipes]     = useState([]);
-  const [page, setPage]           = useState(pageParam);
-  const [totalPages, setTotalPages]    = useState(1);
-  const [searchTerm, setSearchTerm]     = useState(titleParam);
+  const [recipes, setRecipes] = useState([]);
+  const [page, setPage] = useState(pageParam);
+  const [totalPages, setTotalPages] = useState(1);
+  const [searchTerm, setSearchTerm] = useState(titleParam);
 
   // auth + modal + user info
   const [authTokenState, setAuthTokenState] = useState("");
-  const [userName, setUserName]             = useState("");
-  const [open, setOpen]                     = useState(false);
-  const [mode, setMode]                     = useState("login"); // "login" | "register"
-  const [successMessage, setSuccess]        = useState("");
-  const [errorMessage, setErrorMessage]       = useState("");
+  const [userName, setUserName] = useState("");
+  const [open, setOpen] = useState(false);
+  const [mode, setMode] = useState("login"); // "login" | "register"
+  const [successMessage, setSuccess] = useState("");
+  const [errorMessage, setErrorMessage] = useState("");
 
   // Keep local `page` in sync when the user clicks pagination
   useEffect(() => {
@@ -73,7 +74,7 @@ export default function HomePage() {
     getRecipes({
       page,
       limit,
-      title:      titleParam,
+      title: titleParam,
       ingredient: ingredientParam,
     })
       .then(({ recipes: data, pagination }) => {
@@ -86,7 +87,7 @@ export default function HomePage() {
   // initial load: grab token & user from sessionStorage
   useEffect(() => {
     const token = sessionStorage.getItem("token");
-    const user  = JSON.parse(sessionStorage.getItem("user") || "{}");
+    const user = JSON.parse(sessionStorage.getItem("user") || "{}");
 
     if (token) {
       setAuthTokenState(token);
@@ -118,20 +119,20 @@ export default function HomePage() {
   // }, [page]);
 
   // dialog controls
-  const handleOpen  = () => setOpen(true);
+  const handleOpen = () => setOpen(true);
   const handleClose = () => {
     setOpen(false);
     setSuccess("");
     setErrorMessage("");
   };
   const switchToLogin = () => {
-  setMode("login");
-  setErrorMessage("");
-};
+    setMode("login");
+    setErrorMessage("");
+  };
   const switchToRegister = () => {
-  setMode("register");
-  setErrorMessage("");
-};
+    setMode("register");
+    setErrorMessage("");
+  };
   const showSuccessAndClose = (msg, callback) => {
     setSuccess(msg);
     setTimeout(() => {
@@ -139,13 +140,13 @@ export default function HomePage() {
       if (callback) callback();
     }, 1500);
   };
-const showError = (msg, callback) => {
-  setErrorMessage(msg);
-  setTimeout(() => {
-    setErrorMessage("");
-    if (callback) callback();
-  }, 1000);
-};
+  const showError = (msg, callback) => {
+    setErrorMessage(msg);
+    setTimeout(() => {
+      setErrorMessage("");
+      if (callback) callback();
+    }, 1000);
+  };
   // LOGIN
   const handleLoginSubmit = async (e) => {
     e.preventDefault();
@@ -153,7 +154,7 @@ const showError = (msg, callback) => {
     try {
       // 1) Log in
       const { token } = await login({
-        email:    form.get("email"),
+        email: form.get("email"),
         password: form.get("password"),
       });
 
@@ -169,7 +170,7 @@ const showError = (msg, callback) => {
 
       showSuccessAndClose("Login successful!", () => navigate(0));
     } catch (err) {
-      showError( err.response?.data?.message || "Login failed. Try again.");
+      showError(err.response?.data?.message || "Login failed. Try again.");
     }
   };
 
@@ -179,8 +180,8 @@ const showError = (msg, callback) => {
     const form = new FormData(e.currentTarget);
     try {
       await register({
-        name:     form.get("name"),
-        email:    form.get("email"),
+        name: form.get("name"),
+        email: form.get("email"),
         password: form.get("password"),
       });
       showSuccessAndClose(
@@ -324,7 +325,7 @@ const showError = (msg, callback) => {
                         <MKButton
                           fullWidth
                           color="secondary"
-                          onClick={() => navigate(`/recipes/${r.id}`)}
+                          onClick={() => navigate(`/recipe/${r.id}`)}
                         >
                           View
                         </MKButton>
