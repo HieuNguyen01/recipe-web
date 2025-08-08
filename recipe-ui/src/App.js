@@ -30,6 +30,7 @@ import routes from "routes";
 // Pages
 import HomePage from "pages/HomePage";
 import RecipePage from "pages/RecipePage";
+import AddRecipePage from "pages/AddRecipePage";
 
 export default function App() {
   const { pathname } = useLocation();
@@ -60,6 +61,7 @@ export default function App() {
         {getRoutes(routes)}
         <Route path="/" element={<HomePage />} />
         <Route path="/recipe/:id" element={<RecipePage />} />
+        <Route path="/recipe/add" element={<AddRecipePage />} />
         <Route path="/presentation" element={<Presentation />} />
         {/* <Route path="*" element={<Navigate to="/presentation" />} /> */}
       </Routes>

@@ -133,14 +133,16 @@ exports.getRecipes = async (req, res) => {
 // GET single recipe by ID
 exports.getRecipeById = async (req, res) => {
   try {
-    const recipe = await Recipe.findById(req.params.id);
+    const recipe = await Recipe
+      .findById(req.params.id)
+      .populate("authorId", "name");
     if (!recipe) {
       return res.status(404).json({ message: 'Recipe not found' });
     }
     res.json(recipe);
   } catch (err) {
-    console.error(`Error fetching recipe ${req.params.id}:`, err);
-    res.status(500).json({ message: 'Server error fetching recipe' });
+    console.error(err);
+    res.status(500).json({ message: 'Server error' });
   }
 };
 

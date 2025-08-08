@@ -2,21 +2,9 @@
 
 import React, { useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { styled } from "@mui/material/styles";
-import {
-  Container,
-  Grid,
-  Card,
-  CardMedia,
-  CardContent,
-  CardActions,
-  Icon,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  Button,
-  Box,
-  Alert,
+import { styled, alpha } from "@mui/material/styles";
+import { Container, Grid, Card, CardMedia, TextField, CardContent, CardActions, Icon, Dialog,
+  DialogActions, DialogContent, Button, Box, Alert, Menu, MenuItem, Divider
 } from "@mui/material";
 
 import MKBox from "components/MKBox";
@@ -24,8 +12,12 @@ import MKTypography from "components/MKTypography";
 import MKInput from "components/MKInput";
 import MKButton from "components/MKButton";
 import MKPagination from "components/MKPagination";
+import EditIcon from "@mui/icons-material/Edit";
+import FileCopyIcon from "@mui/icons-material/FileCopy";
+import ArchiveIcon from "@mui/icons-material/Archive";
+import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
 
-import { getMe, getRecipes, login, register, setAuthToken } from "services/api";
+import { getMe, getRecipes, login, register, setAuthToken, updateRecipe } from "services/api";
 
 // Styled Dialog for consistent padding
 const BootstrapDialog = styled(Dialog)(({ theme }) => ({
@@ -37,9 +29,54 @@ const BootstrapDialog = styled(Dialog)(({ theme }) => ({
   },
 }));
 
+// Styled Menu
+const StyledMenu = styled((props) => (
+  <Menu
+    elevation={0}
+    anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
+    transformOrigin={{ vertical: "top", horizontal: "right" }}
+    {...props}
+  />
+))(({ theme }) => ({
+  "& .MuiPaper-root": {
+    borderRadius: 6,
+    marginTop: theme.spacing(1),
+    minWidth: 180,
+    color: "rgb(55, 65, 81)",
+    boxShadow:
+      "rgb(255, 255, 255) 0px 0px 0px 0px, " +
+      "rgba(0, 0, 0, 0.05) 0px 0px 0px 1px, " +
+      "rgba(0, 0, 0, 0.1) 0px 10px 15px -3px, " +
+      "rgba(0, 0, 0, 0.05) 0px 4px 6px -2px",
+    "& .MuiMenu-list": {
+      padding: "4px 0",
+    },
+    "& .MuiMenuItem-root": {
+      "& .MuiSvgIcon-root": {
+        fontSize: 18,
+        color: theme.palette.text.secondary,
+        marginRight: theme.spacing(1.5),
+        ...theme.applyStyles("dark", { color: "inherit" }),
+      },
+      "&:active": {
+        backgroundColor: alpha(
+          theme.palette.primary.main,
+          theme.palette.action.selectedOpacity
+        ),
+      },
+    },
+    ...theme.applyStyles("dark", {
+      color: theme.palette.grey[300],
+    }),
+  },
+}));
+
 export default function HomePage() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
+  const [editOpen, setEditOpen]       = useState(false);
+  const [editData, setEditData]       = useState(null);
+  const [editError, setEditError]     = useState("");
 
   // Read from the URL
   const pageParam = parseInt(searchParams.get("page") || "1", 10);
@@ -108,16 +145,6 @@ export default function HomePage() {
     });
   };
 
-  // fetch recipes whenever page changes
-  // useEffect(() => {
-  //   getRecipes({ page, limit })
-  //     .then(({ recipes: data, pagination }) => {
-  //       setRecipes(data);
-  //       setTotal(pagination.totalPages);
-  //     })
-  //     .catch(console.error);
-  // }, [page]);
-
   // dialog controls
   const handleOpen = () => setOpen(true);
   const handleClose = () => {
@@ -147,6 +174,7 @@ export default function HomePage() {
       if (callback) callback();
     }, 1000);
   };
+  
   // LOGIN
   const handleLoginSubmit = async (e) => {
     e.preventDefault();
@@ -166,9 +194,10 @@ export default function HomePage() {
       // 3) get profile
       const user = await getMe();
       sessionStorage.setItem("user", JSON.stringify(user));
+      sessionStorage.setItem('userId', user._id || user.id);
       setUserName(user.name || "");
 
-      showSuccessAndClose("Login successful!", () => navigate(0));
+      showSuccessAndClose("Login successful!", () => navigate());
     } catch (err) {
       showError(err.response?.data?.message || "Login failed. Try again.");
     }
@@ -201,6 +230,102 @@ export default function HomePage() {
     setAuthToken("");
     setAuthTokenState("");
     setUserName("");
+    setPage(1);
+  };
+
+  // menu state + handlers
+  const [anchorEl, setAnchorEl] = useState(null);
+  const menuOpen = Boolean(anchorEl);
+
+  const handleMenuClick = (e) => {
+    setAnchorEl(e.currentTarget);
+  };
+
+  const handleMenuClose = () => {
+    setAnchorEl(null);
+  };
+
+
+  // open the edit dialog with a deep‐copy of this recipe
+  const handleEditOpen = (recipe) => {
+    setEditData({
+      id: recipe.id,
+      image: recipe.image,
+      title: recipe.title,
+      cookingTime: recipe.cookingTime,
+      ingredients: JSON.parse(JSON.stringify(recipe.ingredients)),
+      instructions: [...recipe.instructions]
+    });
+    setEditError("");
+    setEditOpen(true);
+  };
+
+  const handleEditClose = () => {
+    setEditOpen(false);
+    setEditData(null);
+    setEditError("");
+  };
+
+  // Update a top‐level field
+  const handleEditChange = (e) => {
+    const { name, value } = e.target;
+    setEditData((d) => ({ ...d, [name]: value }));
+  };
+
+  // Ingredient helpers
+  const handleIngredientChange = (i, field, value) => {
+    const ing = [...editData.ingredients];
+    ing[i][field] = value;
+    setEditData((d) => ({ ...d, ingredients: ing }));
+  };
+  const handleAddIngredient = () => {
+    setEditData((d) => ({
+      ...d,
+      ingredients: [...d.ingredients, { name: "", amount: "", unit: "" }],
+    }));
+  };
+  const handleRemoveIngredient = (i) => {
+    setEditData((d) => ({
+      ...d,
+      ingredients: d.ingredients.filter((_, idx) => idx !== i),
+    }));
+  };
+
+  // Instruction helpers
+  const handleInstructionChange = (i, value) => {
+    const ins = [...editData.instructions];
+    ins[i] = value;
+    setEditData((d) => ({ ...d, instructions: ins }));
+  };
+  const handleAddInstruction = () => {
+    setEditData((d) => ({
+      ...d,
+      instructions: [...d.instructions, ""],
+    }));
+  };
+  const handleRemoveInstruction = (i) => {
+    setEditData((d) => ({
+      ...d,
+      instructions: d.instructions.filter((_, idx) => idx !== i),
+    }));
+  };
+
+  // Save back to the server
+  const handleEditSave = async () => {
+    try {
+      await updateRecipe(editData.id, {
+        image: editData.image,
+        title: editData.title,
+        cookingTime: editData.cookingTime,
+        ingredients: editData.ingredients,
+        instructions: editData.instructions,
+      });
+      // Refresh list or refetch
+      setPage(1);  // or call getRecipes again
+      handleEditClose();
+    } catch (err) {
+      setEditError(err.response?.data?.message || "Save failed");
+    }
   };
 
   return (
@@ -210,13 +335,24 @@ export default function HomePage() {
         <Container maxWidth="lg">
           <Grid container alignItems="center" spacing={2}>
             {/* Logo */}
-            <Grid item xs={2}>
-              <MKTypography variant="h4" fontWeight="bold">
-                MyRecipes
-              </MKTypography>
+            <Grid item xs={3}>
+              {/* Logo */}
+              <Box
+                // display="flex"
+                // justifyContent="center"
+                // alignItems="center"
+                // mb={3}            // space below the logo
+              >
+                <Box
+                  component="img"
+                  src={`${process.env.PUBLIC_URL}/Logo.svg`}
+                  alt="Site Logo"
+                  sx={{ width: 200, height: 80 }}
+                />
+              </Box>
             </Grid>
             {/* Search Form */}
-            <Grid item xs={6}>
+            <Grid item xs={5}>
               <form onSubmit={handleSearchSubmit}>
                 <MKInput
                   fullWidth
@@ -231,34 +367,72 @@ export default function HomePage() {
                 />
               </form>
             </Grid>
-            {/* Login / Logout */}
             <Grid item xs={4} textAlign="right">
-              {authTokenState ? (
-                <>
-                  <MKTypography
+              <MKTypography
                     variant="button"
                     color="text"
                     sx={{ mr: 2, verticalAlign: "middle" }}
                   >
                     Welcome, {userName}
                   </MKTypography>
-                  <MKButton
-                    variant="gradient"
-                    color="error"
-                    onClick={handleLogout}
-                  >
-                    Logout
-                  </MKButton>
-                </>
-              ) : (
-                <MKButton
-                  variant="gradient"
-                  color="info"
-                  onClick={handleOpen}
+              {/* Menu */}
+              <MKButton
+                id="customized-button"
+                aria-controls={menuOpen ? "customized-menu" : undefined}
+                aria-haspopup="true"
+                aria-expanded={menuOpen ? "true" : undefined}
+                variant="contained"
+                disableElevation
+                onClick={handleMenuClick}
+                endIcon={<KeyboardArrowDownIcon />}
+              >
+                Menu
+              </MKButton>
+              {/* Menu items */}
+              <StyledMenu
+                id="customized-menu"
+                slotProps={{
+                  list: { "aria-labelledby": "customized-button" },
+                }}
+                anchorEl={anchorEl}
+                open={menuOpen}
+                onClose={handleMenuClose}
+              >
+                <MenuItem
+                  onClick={() => {
+                    handleMenuClose();
+                    switchToLogin();
+                    handleOpen();
+                  }}
+                  disableRipple
                 >
-                  Login
-                </MKButton>
-              )}
+                  <EditIcon /> Register/Login
+                </MenuItem>
+
+                <MenuItem
+                  onClick={() => {
+                    handleMenuClose();
+                    navigate("/recipe/add");   // adjust path as needed
+                  }}
+                  disableRipple
+                  disabled={!authTokenState}
+                >
+                  <FileCopyIcon /> Add Recipe
+                </MenuItem>
+
+                <Divider sx={{ my: 0.5 }} />
+
+                <MenuItem
+                  onClick={() => {
+                    handleMenuClose();
+                    handleLogout();
+                  }}
+                  disableRipple
+                  disabled={!authTokenState}
+                >
+                  <ArchiveIcon /> Logout
+                </MenuItem>
+              </StyledMenu>
             </Grid>
           </Grid>
         </Container>
@@ -267,7 +441,7 @@ export default function HomePage() {
       {/* Recipe Cards */}
       <MKBox component="main" py={6}>
         <Container maxWidth="lg">
-          <MKTypography variant="h3" mb={4}>
+          <MKTypography variant="h3" mb={4} textAlign="center">
             Recipe Collection
           </MKTypography>
 
@@ -324,7 +498,8 @@ export default function HomePage() {
                         {/* Always show View */}
                         <MKButton
                           fullWidth
-                          color="secondary"
+                          color="info"
+                          variant="contained"
                           onClick={() => navigate(`/recipe/${r.id}`)}
                         >
                           View
@@ -334,11 +509,10 @@ export default function HomePage() {
                         {authTokenState && r.editable ? (
                           <MKButton
                             fullWidth
-                            variant="outlined"
-                            color="primary"
+                            variant="contained"
+                            color="info"
                             onClick={() =>
-                              navigate(`/recipe/${r._id}/edit`)
-                            }
+                              handleEditOpen(r)}
                           >
                             Edit
                           </MKButton>
@@ -346,7 +520,7 @@ export default function HomePage() {
                           <MKButton
                             fullWidth
                             variant="outlined"
-                            color="primary"
+                            color="info"
                             disabled
                           >
                             Edit
@@ -515,6 +689,140 @@ export default function HomePage() {
           <Button onClick={handleClose} color="secondary">
             Cancel
           </Button>
+        </DialogActions>
+      </BootstrapDialog>
+
+      {/*-----------------Edit Recipe Dialog--------------------------*/}
+      <BootstrapDialog
+        onClose={handleEditClose}
+        aria-labelledby="edit-recipe-dialog"
+        open={editOpen}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogContent dividers>
+          {editError && (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              {editError}
+            </Alert>
+          )}
+
+          {/* Image URL */}
+          <MKInput
+            name="image"
+            label="Image URL"
+            value={editData?.image || ""}
+            onChange={handleEditChange}
+            fullWidth
+            sx={{ mb: 2 }}
+          />
+
+          {/* Title */}
+          <MKInput
+            name="title"
+            label="Title"
+            value={editData?.title || ""}
+            onChange={handleEditChange}
+            fullWidth
+            sx={{ mb: 2 }}
+          />
+
+          {/* Cooking Time */}
+          <MKInput
+            name="cookingTime"
+            label="Cooking Time (min)"
+            type="number"
+            value={editData?.cookingTime || ""}
+            onChange={handleEditChange}
+            fullWidth
+            sx={{ mb: 2 }}
+          />
+
+          {/* Ingredients */}
+          <MKTypography variant="h6" mb={1}>
+            Ingredients
+          </MKTypography>
+          {editData?.ingredients.map((ing, idx) => (
+            <Grid container spacing={1} alignItems="center" key={idx} sx={{ mb: 1 }}>
+              <Grid item xs={5}>
+                <MKInput
+                  placeholder="Name"
+                  value={ing.name}
+                  onChange={(e) => handleIngredientChange(idx, "name", e.target.value)}
+                  fullWidth
+                />
+              </Grid>
+              <Grid item xs={3}>
+                <MKInput
+                  placeholder="Amount"
+                  value={ing.amount}
+                  onChange={(e) => handleIngredientChange(idx, "amount", e.target.value)}
+                  fullWidth
+                />
+              </Grid>
+              <Grid item xs={3}>
+                <MKInput
+                  placeholder="Unit"
+                  value={ing.unit}
+                  onChange={(e) => handleIngredientChange(idx, "unit", e.target.value)}
+                  fullWidth
+                />
+              </Grid>
+              <Grid item xs={1}>
+                <MKButton
+                  color="error"
+                  size="small"
+                  onClick={() => handleRemoveIngredient(idx)}
+                >
+                  ×
+                </MKButton>
+              </Grid>
+            </Grid>
+          ))}
+          <MKButton onClick={handleAddIngredient} sx={{ mb: 2 }}>
+            + Add Ingredient
+          </MKButton>
+
+          {/* Instructions */}
+          <MKTypography variant="h6" mb={1}>
+            Instructions
+          </MKTypography>
+          {editData?.instructions.map((step, idx) => (
+            <Grid container spacing={1} alignItems="center" key={idx} sx={{ mb: 1 }}>
+              <Grid item xs>
+                <TextField
+                  fullWidth
+                  multiline
+                  minRows={2}
+                  placeholder={`Step ${idx + 1}`}
+                  value={step}
+                  onChange={(e) => handleInstructionChange(idx, e.target.value)}
+                />
+              </Grid>
+              <Grid item>
+                <MKButton
+                  color="error"
+                  size="small"
+                  onClick={() => handleRemoveInstruction(idx)}
+                >
+                  ×
+                </MKButton>
+              </Grid>
+            </Grid>
+          ))}
+          <MKButton onClick={handleAddInstruction}>
+            + Add Step
+          </MKButton>
+        </DialogContent>
+
+        {/* Save / Cancel Buttons */}
+        <DialogActions sx={{ p: 2 }}>
+          <MKButton fullWidth onClick={handleEditSave}>
+            Save
+          </MKButton>
+          <MKButton fullWidth color="secondary" onClick={handleEditClose}>
+            Cancel
+          </MKButton>
         </DialogActions>
       </BootstrapDialog>
     </>
