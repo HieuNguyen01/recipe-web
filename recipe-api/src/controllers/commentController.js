@@ -1,29 +1,36 @@
 const Comment = require('../models/Comment');
 const Recipe  = require('../models/Recipe');
 
-exports.addComment = async (req, res) => {
-  const userId   = req.user.id;          // from auth middleware
+exports.addComment = async (req, res, next) => {
+  const authorId = req.user.id;
   const recipeId = req.params.recipeId;
   const { content } = req.body;
 
-  // validation
-  if (!content || content.trim().length === 0) {
-    return res.status(400).json({ message: 'Comment cannot be empty' });
-  }
-
   try {
-    // Ensure recipe exists
+    // 1) Ensure recipe exists
     const recipe = await Recipe.findById(recipeId);
-    if (!recipe) return res.status(404).json({ message: 'Recipe not found' });
+    if (!recipe) {
+      return res.status(404).json({ message: 'Recipe not found' });
+    }
 
-    // Create comment
-    const comment = await Comment.create({ author: userId, recipe: recipeId, content:content.trim() });
-    // Optionally populate author username
-    await comment.populate('author', 'username');
-    res.status(201).json({ data: comment });
+    // 2) Create the comment
+    let comment = await Comment.create({
+      authorId,
+      recipe:  recipeId,
+      content: content.trim(),
+    });
+
+    // 3) Populate authorId → { _id, name } and convert to POJO
+    comment = await comment.populate('authorId', 'name');
+    comment = comment.toObject();
+
+    comment.author = comment.authorId;
+    delete comment.authorId;
+    // 5) Return the new comment under a clear key
+    return res.status(201).json({ data: comment });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: 'Server error adding comment' });
+    console.error('Error adding comment:', err);
+    return res.status(500).json({ message: 'Server error adding comment' });
   }
 };
 
@@ -31,31 +38,30 @@ exports.addComment = async (req, res) => {
  * PUT /api/recipes/:recipeId/comments/:commentId
  */
 exports.updateComment = async (req, res) => {
-  const userId      = req.user.id;
+  const authorId = req.user.id;
   const { recipeId, commentId } = req.params;
-  const { content } = req.body;
-
-  if (!content || !content.trim()) {
-    return res.status(400).json({ message: 'Comment cannot be empty' });
-  }
+  const trimmed = req.body.content.trim();
 
   try {
+    // fetch
     const comment = await Comment.findById(commentId);
     if (!comment || comment.recipe.toString() !== recipeId) {
       return res.status(404).json({ message: 'Comment not found' });
     }
-    if (comment.author.toString() !== userId) {
+
+    // authorize
+    if (comment.author.toString() !== authorId) {
       return res.status(403).json({ message: 'Not allowed to edit this comment' });
     }
 
-    comment.content   = content.trim();
+    // save
+    comment.content   = trimmed;
     comment.updatedAt = Date.now();
     await comment.save();
 
-    // Populate author.username
-    await comment.populate('author', 'username');
+    await comment.populate('author', 'name');
+    return res.json({ data: comment });
 
-    return res.json(comment);
   } catch (err) {
     console.error('Error updating comment:', err);
     return res.status(500).json({ message: 'Server error updating comment' });
@@ -65,13 +71,13 @@ exports.updateComment = async (req, res) => {
 
 exports.getAllComments = async (req, res) => {
   const { recipeId } = req.params;
-
   try {
-    const comments = await Comment.find({ recipe: recipeId })
-      .populate('author', 'username')
+    const comments = await Comment
+      .find({ recipe: recipeId })
+      .populate('author', 'name')
       .sort({ createdAt: -1 });
 
-    return res.json(comments);
+    return res.json({ data: comments });
   } catch (err) {
     console.error('Error fetching comments:', err);
     return res.status(500).json({ message: 'Server error fetching comments' });
@@ -79,7 +85,7 @@ exports.getAllComments = async (req, res) => {
 };
 
 exports.deleteComment = async (req, res) => {
-  const userId    = req.user.id;
+  const authorId    = req.user.id;
   const { recipeId, commentId } = req.params;
 
   try {
@@ -87,11 +93,9 @@ exports.deleteComment = async (req, res) => {
     if (!comment || comment.recipe.toString() !== recipeId) {
       return res.status(404).json({ message: 'Comment not found' });
     }
-
-    if (comment.author.toString() !== userId) {
+    if (comment.author.toString() !== authorId) {
       return res.status(403).json({ message: 'Not allowed to delete this comment' });
     }
-
     await comment.deleteOne();
     return res.json({ message: 'Comment deleted' });
   } catch (err) {

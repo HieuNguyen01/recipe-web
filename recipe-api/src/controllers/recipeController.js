@@ -202,15 +202,26 @@ exports.getRecipes = async (req, res) => {
 // };
 
 // GET single recipe by ID
-exports.getRecipeById = async (req, res,next) => {
+exports.getRecipeById = async (req, res, next) => {
   try {
     const recipe = await Recipe.findById(req.params.id)
       .populate('authorId', 'name')
-      .populate({ path: 'comments', options: { sort: { createdAt: -1 } },
-        populate: { path: 'author', select: 'name' } })
+      .populate({
+        path: 'comments',
+        options: { sort: { createdAt: -1 } },      // newest first
+        populate: { path: 'authorId', select: 'name' }
+      })
       .lean({ virtuals: true });
+
     if (!recipe) return res.sendStatus(404);
-return res.json(recipe);
+    // rename each comment.authorId → comment.author
+    recipe.comments = recipe.comments.map(c => {
+      c.author = c.authorId;
+      delete c.authorId;
+      return c;
+    });
+
+    return res.json(recipe);
   } catch (err) {
     next(err);
   }

@@ -10,8 +10,8 @@ const usersRoutes   = require('./routes/user');
 // const commentRoutes = require('./routes/comment'); // now mounted via recipe routes
 
 const app = express();
-app.use(cors());
 app.use(express.json());
+app.use(cors());
 
 // Root health check
 app.get('/', (req, res) => res.send('🍔 Recipe API is running'));

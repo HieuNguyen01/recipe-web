@@ -173,15 +173,24 @@ export default function RecipePage() {
         setNewComment("");
     }
 
-    function submitComment() {
-        if (!newComment.trim()) return;
-        commentRecipe(id, newComment)
-            .then((res) => {
-                setRecipe((r) => ({ ...r, comments: res.comments }));
-                closeComment();
-            })
-            .catch(console.error);
+  async function submitComment() {
+    if (!newComment.trim()) return;
+    try {
+      const res = await commentRecipe(id, newComment);
+      const created = res.data.data;
+
+      // merge into state, keeping newest first
+      setRecipe(r => ({
+        ...r,
+        comments: [created, ...(r.comments || [])]
+      }));
+
+      closeComment();
+    } catch (err) {
+      console.error("Submit error:", err);
+      // showError(getErrorMessage(err.response?.status));
     }
+  }
 
     return (
     <MKBox component="main" py={6}>
@@ -256,7 +265,7 @@ export default function RecipePage() {
                     Author:
                   </MKTypography>
                   <MKTypography variant="body1">
-                    {recipe.authorId.name}
+                      {recipe.authorId?.name || recipe.author?.name || '—'}
                   </MKTypography>
                 </Box>
             </Grid>
@@ -549,6 +558,29 @@ export default function RecipePage() {
             )}
           </CardActions>
         </RecipeCard>
+
+          {/* Comments List */}
+          {recipe.comments?.length > 0 && (
+            <Box mt={3}>
+              <MKTypography variant="h5" gutterBottom>
+                Comments
+              </MKTypography>
+
+              {recipe.comments.map((c) => (
+                <Box key={c._id} sx={{ border: 1, borderColor: "grey.300", borderRadius: 1, p: 2, mb: 2 }}>
+                  <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
+                    <MKTypography variant="subtitle2">
+                      {c.author?.name || c.authorId?.name||'—'}
+                    </MKTypography>
+                    <MKTypography variant="caption" color="text">
+                      {new Date(c.createdAt).toLocaleString()}
+                    </MKTypography>
+                  </Box>
+                  <MKTypography variant="body1">{c.content}</MKTypography>
+                </Box>
+              ))}
+            </Box>
+          )}
 
         {/* Comment Dialog */}
         <Dialog open={commentDialog} onClose={closeComment}>

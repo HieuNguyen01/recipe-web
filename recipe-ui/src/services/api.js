@@ -61,8 +61,8 @@ export function deleteRecipe(id) {
   return request("delete", `/recipe/${id}`);
 }
 
-export function commentRecipe(id, comment) {
-  return request("post", `/recipe/${id}/comments`, { text: comment });
+export function commentRecipe(recipeId, content) {
+  return api.post(`/recipe/${recipeId}/comments`, { content });
 }
 
 export function likeRecipe(id) {

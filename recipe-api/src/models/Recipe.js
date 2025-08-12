@@ -11,16 +11,6 @@ const ingredientSchema = new mongoose.Schema({
   unit:   { type: String, required: true, enum: validUnits }
 }, { _id: false });
 
-// Comment sub‐document (no own _id)
-const commentSchema = new mongoose.Schema({
-  commenterId: {
-    type: mongoose.Types.ObjectId,
-    ref: 'User',
-    required: true
-  },
-  text: { type: String, required: true }
-}, { _id: false });
-
 // Main Recipe schema
 const recipeSchema = new mongoose.Schema({
   title:         { type: String, required: true },
@@ -45,13 +35,22 @@ const recipeSchema = new mongoose.Schema({
   authorId:       { type: mongoose.Types.ObjectId, ref: 'User', required: true },
   averageRating:  { type: Number, default: 0, min: 0, max: 5 },
   ratingCount:    { type: Number, default: 0, min: 0 },
-  likeCount:      { type: Number, default: 0, min: 0 },
-  comments:       [ commentSchema ],
   likes:          [ { type: mongoose.Types.ObjectId, ref: 'User' } ]
 }, {
   timestamps: true,
   toJSON:    { virtuals: true },
   toObject:  { virtuals: true }
+});
+
+// Virtual for full comment docs
+recipeSchema.virtual('comments', {
+  ref: 'Comment', localField: '_id',
+  foreignField: 'recipe', justOne: false
+});
+// Virtual for like count only
+recipeSchema.virtual('likeCount', {
+  ref: 'Like', localField: '_id',
+  foreignField: 'recipe', count: true
 });
 
 // Expose `id` as a hex‐string virtual (for lean queries with { virtuals: true })
