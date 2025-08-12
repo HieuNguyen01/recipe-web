@@ -88,7 +88,7 @@ export default function HomePage() {
   const [recipes, setRecipes] = useState([]);
   const [page, setPage] = useState(pageParam);
   const [totalPages, setTotalPages] = useState(1);
-  const [searchTerm, setSearchTerm] = useState(titleParam);
+  const [searchTerm, setSearchTerm] = useState(titleParam || ingredientParam);
 
   // auth + modal + user info
   const [authTokenState, setAuthTokenState] = useState("");
@@ -106,20 +106,32 @@ export default function HomePage() {
     });
   }, [page, setSearchParams]);
 
+  // Debounced search: whenever `searchTerm` changes,
+  // wait 500 ms of idle time, then reset to page 1 and
+  // push new `title` & `ingredient` params into the URL.
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setPage(1);  // reset to first page on new search
+      setSearchParams(params => {
+        params.set("page", 1);
+        params.set("title",      searchTerm);
+        params.set("ingredient", searchTerm);
+        return params;
+      });
+    }, 500);
+    // cleanup if user types again before 500 ms
+    return () => clearTimeout(handler);
+  }, [searchTerm, setSearchParams]);
+
   // Whenever page, title, or ingredient in the URL changes, re-fetch
   useEffect(() => {
-    getRecipes({
-      page,
-      limit,
-      title: titleParam,
-      ingredient: ingredientParam,
-    })
+    getRecipes({ page, limit, title: titleParam, ingredient: ingredientParam})
       .then(({ recipes: data, pagination }) => {
         setRecipes(data);
         setTotalPages(pagination.totalPages);
       })
-      .catch(console.error);
-  }, [page, titleParam, ingredientParam]);
+      .catch(err => console.error("Fetch recipes error:", err));
+  }, [page, titleParam, ingredientParam,authTokenState]);
 
   // initial load: grab token & user from sessionStorage
   useEffect(() => {
@@ -134,16 +146,17 @@ export default function HomePage() {
   }, []);
 
   // Handle the search form (Enter key)
-  const handleSearchSubmit = e => {
-    e.preventDefault();
-    // Reset to first page on new search
-    setPage(1);
-    setSearchParams(params => {
-      params.set("title", searchTerm);
-      params.set("page", 1);
-      return params;
-    });
-  };
+  // const handleSearchSubmit = e => {
+  //   e.preventDefault();
+  //   // Reset to first page on new search
+  //   setPage(1);
+  //   setSearchParams(prev => {
+  //     prev.set("page", 1);
+  //     prev.set("title", searchTerm);
+  //     prev.set("ingredient", searchTerm);
+  //     return prev;
+  //   });
+  // };
 
   // dialog controls
   const handleOpen = () => setOpen(true);
@@ -353,19 +366,14 @@ export default function HomePage() {
             </Grid>
             {/* Search Form */}
             <Grid item xs={5}>
-              <form onSubmit={handleSearchSubmit}>
                 <MKInput
                   fullWidth
                   placeholder="Search by title/ingredient..."
                   size="small"
                   value={searchTerm}
                   onChange={e => setSearchTerm(e.target.value)}
-                  onKeyDown={e => {
-                    if (e.key === "Enter") handleSearchSubmit(e);
-                  }}
                   icon={{ component: Icon, props: { children: "search" } }}
                 />
-              </form>
             </Grid>
             <Grid item xs={4} textAlign="right">
               <MKTypography
