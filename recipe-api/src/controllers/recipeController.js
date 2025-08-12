@@ -64,85 +64,155 @@ exports.createRecipe = async (req, res) => {
 exports.getRecipes = async (req, res) => {
   try {
     const { title, ingredient, page = 1, limit = 10 } = req.query;
+
+    // unify search term
+    const searchTerm = (title || ingredient || '').trim();
     const filter = {};
 
-    if (title) {
-      filter.title = { $regex: title, $options: 'i' };
-    }
-    if (ingredient) {
-      filter['ingredients.name'] = { $regex: ingredient, $options: 'i' };
+    if (searchTerm) {
+      // split on whitespace into tokens
+      const tokens = searchTerm.split(/\s+/);
+
+      // build an OR for each token against title or ingredients.name
+      filter.$or = tokens.flatMap(token => [
+        { title:            { $regex: token,            $options: 'i' } },
+        { 'ingredients.name': { $regex: token,          $options: 'i' } }
+      ]);
     }
 
-    const pageNum = parseInt(page, 10) ;
+    // pagination
+    const pageNum  = parseInt(page,  10);
     const limitNum = parseInt(limit, 10);
-    const skip = (pageNum - 1) * limitNum;
+    const skip     = (pageNum - 1) * limitNum;
 
+    // fetch + populate + sort + paginate
     const docs = await Recipe.find(filter)
-      .populate("authorId", "name")
-      .collation({ locale: 'vi', strength: 1 })
+      .populate('authorId', 'name')
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limitNum);
-    //total pages
-    const total = await Recipe.countDocuments(filter);
-    const totalPages = Math.ceil(total / limitNum);
 
+    const total = await Recipe.countDocuments(filter);
+
+    // map to your response shape
     const currentUserId = req.user?._id.toString();
     const recipes = docs.map(doc => {
-      const r = doc.toObject();    // gives you everything from Mongo
-      // console.log(doc._id.toString());
+      const r = doc.toObject();
       return {
-        // Core listing fields (HomePage)
-        id: r.id,
-        title: r.title,
-        image: r.image,
-        author: r.authorId?.name || 'Unknown author',
-        rating: r.averageRating,
-
-        // Only mark editable if the logged-in user owns recipes on the list for triggering Edit button
-        editable:     Boolean(currentUserId) && r.authorId?._id.toString() === currentUserId,
-
-        // fields for later uses)
-        description: r.description,
-        cookingTime: r.cookingTime,
-        ingredients: r.ingredients,
+        id:           r.id,
+        title:        r.title,
+        image:        r.image,
+        author:       r.authorId?.name || 'Unknown author',
+        rating:       r.averageRating,
+        editable:     currentUserId === r.authorId?._id.toString(),
+        description:  r.description,
+        cookingTime:  r.cookingTime,
+        ingredients:  r.ingredients,
         instructions: r.instructions,
-        likeCount: r.likeCount,
-        ratingCount: r.ratingCount,
-        comments: r.comments,
-        createdAt: r.createdAt,
-        updatedAt: r.updatedAt,
+        likeCount:    r.likeCount,
+        ratingCount:  r.ratingCount,
+        comments:     r.comments,
+        createdAt:    r.createdAt,
+        updatedAt:    r.updatedAt
       };
     });
 
-    res.json({
-        recipes,
-        pagination: {
-          total,
-          page: pageNum,
-          limit: limitNum,
-          totalPages
+    return res.json({
+      recipes,
+      pagination: {
+        total,
+        page:       pageNum,
+        limit:      limitNum,
+        totalPages: Math.ceil(total / limitNum)
       }
     });
+
   } catch (err) {
     console.error('Error fetching recipes:', err);
-    res.status(500).json({ message: 'Server error fetching recipes' });
+    return res.status(500).json({ message: 'Server error fetching recipes' });
   }
 };
+// exports.getRecipes = async (req, res) => {
+//   try {
+//     const { title, ingredient, page = 1, limit = 10 } = req.query;
+//     const filter = {};
+
+//     if (title) {
+//       filter.title = { $regex: title, $options: 'i' };
+//     }
+//     if (ingredient) {
+//       filter['ingredients.name'] = { $regex: ingredient, $options: 'i' };
+//     }
+
+//     const pageNum = parseInt(page, 10) ;
+//     const limitNum = parseInt(limit, 10);
+//     const skip = (pageNum - 1) * limitNum;
+
+//     const docs = await Recipe.find(filter)
+//       .populate("authorId", "name")
+//       .collation({ locale: 'vi', strength: 1 })
+//       .sort({ createdAt: -1 })
+//       .skip(skip)
+//       .limit(limitNum);
+//     //total pages
+//     const total = await Recipe.countDocuments(filter);
+//     const totalPages = Math.ceil(total / limitNum);
+
+//     const currentUserId = req.user?._id.toString();
+//     const recipes = docs.map(doc => {
+//       const r = doc.toObject();    // gives you everything from Mongo
+//       // console.log(doc._id.toString());
+//       return {
+//         // Core listing fields (HomePage)
+//         id: r.id,
+//         title: r.title,
+//         image: r.image,
+//         author: r.authorId?.name || 'Unknown author',
+//         rating: r.averageRating,
+
+//         // Only mark editable if the logged-in user owns recipes on the list for triggering Edit button
+//         editable:     Boolean(currentUserId) && r.authorId?._id.toString() === currentUserId,
+
+//         // fields for later uses)
+//         description: r.description,
+//         cookingTime: r.cookingTime,
+//         ingredients: r.ingredients,
+//         instructions: r.instructions,
+//         likeCount: r.likeCount,
+//         ratingCount: r.ratingCount,
+//         comments: r.comments,
+//         createdAt: r.createdAt,
+//         updatedAt: r.updatedAt,
+//       };
+//     });
+
+//     res.json({
+//         recipes,
+//         pagination: {
+//           total,
+//           page: pageNum,
+//           limit: limitNum,
+//           totalPages
+//       }
+//     });
+//   } catch (err) {
+//     console.error('Error fetching recipes:', err);
+//     res.status(500).json({ message: 'Server error fetching recipes' });
+//   }
+// };
 
 // GET single recipe by ID
-exports.getRecipeById = async (req, res) => {
+exports.getRecipeById = async (req, res,next) => {
   try {
-    const recipe = await Recipe
-      .findById(req.params.id)
-      .populate("authorId", "name");
-    if (!recipe) {
-      return res.status(404).json({ message: 'Recipe not found' });
-    }
-    res.json(recipe);
+    const recipe = await Recipe.findById(req.params.id)
+      .populate('authorId', 'name')
+      .populate({ path: 'comments', options: { sort: { createdAt: -1 } },
+        populate: { path: 'author', select: 'name' } })
+      .lean({ virtuals: true });
+    if (!recipe) return res.sendStatus(404);
+return res.json(recipe);
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: 'Server error' });
+    next(err);
   }
 };
 
