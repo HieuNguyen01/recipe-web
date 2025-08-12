@@ -16,6 +16,7 @@ import EditIcon from "@mui/icons-material/Edit";
 import FileCopyIcon from "@mui/icons-material/FileCopy";
 import ArchiveIcon from "@mui/icons-material/Archive";
 import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
+import TablePagination from "@mui/material/TablePagination";
 
 import { getMe, getRecipes, login, register, setAuthToken, updateRecipe } from "services/api";
 
@@ -82,13 +83,14 @@ export default function HomePage() {
   const pageParam = parseInt(searchParams.get("page") || "1", 10);
   const titleParam = searchParams.get("title") || "";
   const ingredientParam = searchParams.get("ingredient") || "";
-  const limit = 3;
+  // const limit = 3;
 
   // recipes + pagination
   const [recipes, setRecipes] = useState([]);
   const [page, setPage] = useState(pageParam);
   const [totalPages, setTotalPages] = useState(1);
   const [searchTerm, setSearchTerm] = useState(titleParam || ingredientParam);
+    const [rowsPerPage, setRowsPerPage] = useState(parseInt(searchParams.get("limit") || "3", 10));
 
   // auth + modal + user info
   const [authTokenState, setAuthTokenState] = useState("");
@@ -99,39 +101,47 @@ export default function HomePage() {
   const [errorMessage, setErrorMessage] = useState("");
 
   // Keep local `page` in sync when the user clicks pagination
-  useEffect(() => {
-    setSearchParams(params => {
-      params.set("page", page);
+ useEffect(() => {
+    setSearchParams((params) => {
+      params.set("page", String(page + 1));
+      params.set("limit", String(rowsPerPage));
+      params.set("title", searchTerm);
+      params.set("ingredient", searchTerm);
       return params;
     });
-  }, [page, setSearchParams]);
+  }, [page, rowsPerPage]);
 
-  // Debounced search: whenever `searchTerm` changes,
-  // wait 500 ms of idle time, then reset to page 1 and
-  // push new `title` & `ingredient` params into the URL.
+  // Debounced searchTerm → reset to first page
   useEffect(() => {
-    const handler = setTimeout(() => {
-      setPage(1);  // reset to first page on new search
-      setSearchParams(params => {
-        params.set("page", 1);
-        params.set("title",      searchTerm);
+    const timeout = setTimeout(() => {
+      setPage(0);
+      setSearchParams((params) => {
+        params.set("page", "1");
+        params.set("limit", String(rowsPerPage));
+        params.set("title", searchTerm);
         params.set("ingredient", searchTerm);
         return params;
       });
     }, 500);
-    // cleanup if user types again before 500 ms
-    return () => clearTimeout(handler);
-  }, [searchTerm, setSearchParams]);
+    return () => clearTimeout(timeout);
+  }, [searchTerm]);
+
 
   // Whenever page, title, or ingredient in the URL changes, re-fetch
-  useEffect(() => {
-    getRecipes({ page, limit, title: titleParam, ingredient: ingredientParam})
+useEffect(() => {
+    getRecipes({
+      page:      page + 1,
+      limit:     rowsPerPage,
+      title:     searchTerm,
+      ingredient: searchTerm
+    })
       .then(({ recipes: data, pagination }) => {
         setRecipes(data);
-        setTotalPages(pagination.totalPages);
+        setTotalPages(pagination.total);
       })
       .catch(err => console.error("Fetch recipes error:", err));
-  }, [page, titleParam, ingredientParam,authTokenState]);
+  }, [page, rowsPerPage, searchTerm,authTokenState]);
+
 
   // initial load: grab token & user from sessionStorage
   useEffect(() => {
@@ -144,19 +154,14 @@ export default function HomePage() {
       if (user.name) setUserName(user.name);
     }
   }, []);
-
-  // Handle the search form (Enter key)
-  // const handleSearchSubmit = e => {
-  //   e.preventDefault();
-  //   // Reset to first page on new search
-  //   setPage(1);
-  //   setSearchParams(prev => {
-  //     prev.set("page", 1);
-  //     prev.set("title", searchTerm);
-  //     prev.set("ingredient", searchTerm);
-  //     return prev;
-  //   });
-  // };
+ 
+  // Handlers for MUI TablePagination
+  const handleChangePage = (_, newPage) => setPage(newPage);
+  const handleChangeRowsPerPage = (event) => {
+    const newLimit = parseInt(event.target.value, 10);
+    setRowsPerPage(newLimit);
+    setPage(0);
+  };
 
   // dialog controls
   const handleOpen = () => setOpen(true);
@@ -542,37 +547,21 @@ export default function HomePage() {
             ))}
           </Grid>
 
-          {/* Pagination */}
-          <MKBox mt={6} display="flex" justifyContent="center">
-            <MKPagination>
-              <MKPagination
-                item
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                disabled={page === 1}
-              >
-                <Icon>keyboard_arrow_left</Icon>
-              </MKPagination>
-
-              {Array.from({ length: totalPages }, (_, i) => (
-                <MKPagination
-                  key={i + 1}
-                  item
-                  active={page === i + 1}
-                  onClick={() => setPage(i + 1)}
-                >
-                  {i + 1}
-                </MKPagination>
-              ))}
-
-              <MKPagination
-                item
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                disabled={page === totalPages}
-              >
-                <Icon>keyboard_arrow_right</Icon>
-              </MKPagination>
-            </MKPagination>
-          </MKBox>
+      {/* Pagination */}
+      <MKBox mt={6} display="flex" justifyContent="center">
+        <TablePagination
+          component="div"
+          count={totalPages}
+          page={page}
+          onPageChange={handleChangePage}
+          rowsPerPage={rowsPerPage}
+          onRowsPerPageChange={handleChangeRowsPerPage}
+          rowsPerPageOptions={[2, 3, 4]}
+          labelRowsPerPage="Recipes per page:"
+          showFirstButton
+          showLastButton
+        />
+      </MKBox>
         </Container>
       </MKBox>
 

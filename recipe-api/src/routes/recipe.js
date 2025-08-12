@@ -43,29 +43,29 @@ function validateCommentContent(req, res, next) {
 /* ──────────────────────────────────────────── */
 
 /**
- * GET /api/recipes
+ * GET /api/recipe
  * Public – list all recipes with optional filters & pagination
  * Query params: title, ingredient, page, limit
  */
 //GET /api/recipe will run optionalAuth **before** getRecipes
 router.get('/', optionalAuth, getRecipes);
 /**
- * GET /api/recipes/:id
+ * GET /api/recipe/:id
  * Public – fetch a single recipe
  */
 router.get('/:id', validateObjectId('id'), getRecipeById);
 /**
- * POST /api/recipes
+ * POST /api/recipe
  * Private – create a new recipe
  */
 router.post('/', auth, createRecipe);
 /**
- * PUT /api/recipes/:id
+ * PUT /api/recipe/:id
  * Private – update a recipe (author only)
  */
 router.put('/:id', auth, validateObjectId('id'), updateRecipe);
 /**
- * DELETE /api/recipes/:id
+ * DELETE /api/recipe/:id
  * Private – delete a recipe (author only)
  */
 router.delete('/:id', auth, validateObjectId('id'), deleteRecipe);
@@ -73,13 +73,13 @@ router.delete('/:id', auth, validateObjectId('id'), deleteRecipe);
 // ── Rating & Like Endpoints ──────────────────
 
 /**
- * POST /api/recipes/:id/rate
+ * POST /api/recipe/:id/rate
  * Private – vote a 1–5 rating, returns { ratingCount, averageRating }
  */
 router.post('/:id/rate', auth, validateObjectId('id'), rateRecipe);
 
 /**
- * POST /api/recipes/:id/like
+ * POST /api/recipe/:id/like
  * Private – toggle a like, returns { liked, likeCount }
  */
 router.post('/:id/like', auth, validateObjectId('id'), likeRecipe);
@@ -90,7 +90,7 @@ router.post('/:id/like', auth, validateObjectId('id'), likeRecipe);
 /* ──────────────────────────────────────────── */
 
 /**
- * GET   /api/recipes/:recipeId/comments
+ * GET   /api/recipe/:recipeId/comments
  * Public – list comments for a recipe
  */
 router.get(
@@ -100,7 +100,7 @@ router.get(
 );
 
 /**
- * POST  /api/recipes/:recipeId/comments
+ * POST  /api/recipe/:recipeId/comments
  * Private – add a comment
  */
 router.post(
@@ -112,7 +112,7 @@ router.post(
 );
 
 /**
- * PUT /api/recipes/:recipeId/comments/:commentId
+ * PUT /api/recipe/:recipeId/comments/:commentId
  * Private - update comment
  */
 router.put(
@@ -124,7 +124,7 @@ router.put(
 );
 
 /**
- * DELETE /api/recipes/:recipeId/comments/:commentId
+ * DELETE /api/recipe/:recipeId/comments/:commentId
  * Private – delete a comment
  */
 router.delete(
