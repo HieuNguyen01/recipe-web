@@ -168,11 +168,14 @@ useEffect(() => {
         setEditMode(false);
     }
 
-    function handleDelete() {
-        if (window.confirm("Delete this recipe?")) {
-            deleteRecipe(id).then(() => navigate("/"));
-        }
+  function handleDelete() {
+    if (window.confirm("Delete this recipe?")) {
+      deleteRecipe(id).then(() => {
+        // clear any search-params if needed
+        navigate("/", { replace: true });
+      });
     }
+  }
 
   async function handleLike() {
     console.log("▶️ sending POST to /like for id:", id);
@@ -212,12 +215,6 @@ useEffect(() => {
       // showError(getErrorMessage(err.response?.status));
     }
   }
-    console.log({
-  isAuthed,
-  recipeId: id,
-  currentLikeCount: recipe.likeCount,
-  likedBefore: recipe.liked
-});
 
     return (
     <MKBox component="main" py={6}>

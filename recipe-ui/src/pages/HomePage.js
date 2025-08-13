@@ -248,7 +248,7 @@ useEffect(() => {
     setAuthToken("");
     setAuthTokenState("");
     setUserName("");
-    setPage(1);
+    setPage(0);
   };
 
   // menu state + handlers
