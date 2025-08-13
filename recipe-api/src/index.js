@@ -10,8 +10,13 @@ const usersRoutes   = require('./routes/user');
 // const commentRoutes = require('./routes/comment'); // now mounted via recipe routes
 
 const app = express();
+// Allow your React origin (or use '*' for all)
+app.use(cors({
+  origin: 'http://localhost:3000',
+  methods: ['GET','POST','PUT','DELETE','OPTIONS'],
+  allowedHeaders: ['Content-Type','Authorization']
+}));
 app.use(express.json());
-app.use(cors());
 
 // Root health check
 app.get('/', (req, res) => res.send('🍔 Recipe API is running'));

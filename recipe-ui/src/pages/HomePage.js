@@ -90,7 +90,7 @@ export default function HomePage() {
   const [page, setPage] = useState(pageParam);
   const [totalPages, setTotalPages] = useState(1);
   const [searchTerm, setSearchTerm] = useState(titleParam || ingredientParam);
-    const [rowsPerPage, setRowsPerPage] = useState(parseInt(searchParams.get("limit") || "3", 10));
+  const [rowsPerPage, setRowsPerPage] = useState(parseInt(searchParams.get("limit") || "3", 10));
 
   // auth + modal + user info
   const [authTokenState, setAuthTokenState] = useState("");

@@ -211,6 +211,7 @@ exports.getRecipeById = async (req, res, next) => {
         options: { sort: { createdAt: -1 } },      // newest first
         populate: { path: 'authorId', select: 'name' }
       })
+      .populate('likeCount')
       .lean({ virtuals: true });
 
     if (!recipe) return res.sendStatus(404);
@@ -220,6 +221,12 @@ exports.getRecipeById = async (req, res, next) => {
       delete c.authorId;
       return c;
     });
+
+    // // If you added a `liked` flag in your POST, you can recalc it here:
+    // const userId = req.user?.id;
+    // if (userId) {
+    //   recipe.liked = await Like.exists({ user: userId, recipe: recipe._id });
+    // }
 
     return res.json(recipe);
   } catch (err) {
@@ -365,13 +372,14 @@ exports.likeRecipe = async (req, res) => {
       liked = true;
     }
 
-    // Count total likes
-    const totalLikes = await Like.countDocuments({ recipe: recipeId });
+    // // Count total likes
+    // const totalLikes = await Like.countDocuments({ recipe: recipeId });
 
-    // Update Recipe doc
-    await Recipe.findByIdAndUpdate(recipeId, { likeCount: totalLikes });
+    // // Update Recipe doc
+    // await Recipe.findByIdAndUpdate(recipeId, { likeCount: totalLikes });
 
-    return res.json({ liked, likeCount: totalLikes });
+    return res.json({ liked, likeCount: await Like.countDocuments({ recipe: recipeId }) });
+
   } catch (err) {
     console.error('likeRecipe error:', err);
     return res.status(500).json({ message: 'Server error toggling like' });

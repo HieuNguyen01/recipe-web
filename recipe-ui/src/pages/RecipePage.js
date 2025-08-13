@@ -51,7 +51,7 @@ function EditableField({ label, value, editMode, onChange, multiline }) {
                     <TextField
                         fullWidth
                         multiline
-                        minRows={3}
+                        minRows={2}
                         name={label.toLowerCase()}
                         value={value}
                         onChange={onChange}
@@ -77,7 +77,19 @@ function EditableField({ label, value, editMode, onChange, multiline }) {
 export default function RecipePage() {
     const { id } = useParams();
     const navigate = useNavigate();
-    const [recipe, setRecipe] = useState(null);
+    const [recipe, setRecipe] = useState({
+  _id:          id, 
+  title:        "",
+  description:  "",
+  cookingTime:  0,
+  ingredients:  [],
+  instructions: [],
+  comments:     [],
+  likeCount:    0,
+  liked:        false,
+  authorId:     { _id: "", name: "" },
+  // …any other fields you render…
+});
     const [draft, setDraft] = useState({});
     const [editMode, setEditMode] = useState(false);
     const [authToken, setAuthToken] = useState("");
@@ -98,16 +110,27 @@ export default function RecipePage() {
 
 
     // Fetch recipe
-    useEffect(() => {
-        getRecipeById(id)
-            .then((data) => {
-                setRecipe(data);
-                setDraft({
-                    ...data, author: data.authorId.name || ""  // copy name out for EditableField
-                });
-            })
-            .catch(console.error);
-    }, [id]);
+useEffect(() => {
+  getRecipeById(id)
+    .then((data) => {
+      setRecipe(prev => ({
+        ...prev,
+        ...data,
+        // fallback to existing if server didn’t send them
+        comments:     data.comments     ?? prev.comments,
+        likeCount:    data.likeCount    ?? prev.likeCount,
+        liked:        data.liked        ?? prev.liked,
+        ingredients:  data.ingredients  ?? prev.ingredients,
+        instructions: data.instructions ?? prev.instructions
+      }));
+      setDraft({
+        ...data,
+        author: data.authorId?.name || ""
+      });
+    })
+    .catch(console.error);
+}, [id]);
+
 
     if (!recipe) return <MKTypography>Loading...</MKTypography>;
 
@@ -126,14 +149,19 @@ export default function RecipePage() {
     }
 
     function handleSave() {
-        updateRecipe(id, draft)
-            .then((updated) => {
-                setRecipe(updated);
-                setDraft(updated);
-                setEditMode(false);
-            })
-            .catch(console.error);
+      updateRecipe(id, draft)
+        .then(() => getRecipeById(id))   // fetch the complete doc
+        .then((fullRecipe) => {
+          setRecipe(fullRecipe);
+          setDraft({
+            ...fullRecipe,
+            author: fullRecipe.authorId.name
+          });
+          setEditMode(false);
+        })
+        .catch(console.error);
     }
+
 
     function handleCancel() {
         setDraft(recipe);
@@ -142,27 +170,20 @@ export default function RecipePage() {
 
     function handleDelete() {
         if (window.confirm("Delete this recipe?")) {
-            deleteRecipe(id).then(() => navigate("/recipes"));
+            deleteRecipe(id).then(() => navigate("/"));
         }
     }
 
-  function handleLike() {
-    likeRecipe(id)
-      .then(({ liked, likeCount }) => {
-        setRecipe((prev) => ({
-          ...prev,
-          liked,
-          likeCount
-        }));
-      })
-      .catch(console.error);
+  async function handleLike() {
+    console.log("▶️ sending POST to /like for id:", id);
+    try {
+      const { liked, likeCount } = await likeRecipe(id);
+      console.log("◀️ got response:", { liked, likeCount });
+      setRecipe(prev => ({ ...prev, liked, likeCount }));
+    } catch (err) {
+      console.error("⚠️ likeRecipe error:", err.response?.status, err.message);
+    }
   }
-
-    // function handleLike() {
-    //     likeRecipe(id)
-    //         .then((res) => setRecipe((r) => ({ ...r, likeCount: res.likeCount })))
-    //         .catch(console.error);
-    // }
 
     function openComment() {
         setCommentDialog(true);
@@ -191,6 +212,12 @@ export default function RecipePage() {
       // showError(getErrorMessage(err.response?.status));
     }
   }
+    console.log({
+  isAuthed,
+  recipeId: id,
+  currentLikeCount: recipe.likeCount,
+  likedBefore: recipe.liked
+});
 
     return (
     <MKBox component="main" py={6}>
@@ -279,7 +306,7 @@ export default function RecipePage() {
                     star
                 </Icon>
                 <MKTypography variant="body2" color="warning" display="inline">
-                    {recipe.averageRating.toFixed(1)}
+                    {(recipe.averageRating ?? 0).toFixed(1)}
                 </MKTypography>
               </Box>
             </Grid>
@@ -491,72 +518,76 @@ export default function RecipePage() {
 
 
           {/* Actions: Like/Comment then Edit/Delete */}
-          <CardActions sx={{ flexDirection: "column", px: 2, pb: 2 }}>
-            <Grid container spacing={1} justifyContent="center">
-              <Grid item>
-                <MKButton
-                  size="small"
-                  startIcon={<Icon>thumb_up</Icon>}
-                  // color={recipe.liked ? "primary" : "inherit"}
-                  // variant={recipe.liked ? "contained" : "outlined"}
-                  disabled={!isAuthed}
-                  onClick={handleLike}
-                >
-                  Like ({recipe.likeCount})
-                </MKButton>
-              </Grid>
-              <Grid item>
-                <MKButton
-                  size="small"
-                  startIcon={<Icon>comment</Icon>}
-                  disabled={!isAuthed}
-                  onClick={openComment}
-                >
-                  Comment ({recipe.comments.length})
-                </MKButton>
-              </Grid>
-            </Grid>
+<CardActions sx={{ flexDirection: "column", px: 2, pb: 2 }}>
+  {/* 1. Show Like/Comment only when NOT in edit mode */}
+  {!editMode && (
+    <Grid container spacing={1} justifyContent="center">
+      <Grid item>
+        <MKButton
+          size="small"
+          startIcon={<Icon>thumb_up</Icon>}
+          disabled={!isAuthed}
+          onClick={handleLike}
+        >
+          Like ({recipe.likeCount})
+        </MKButton>
+      </Grid>
+      <Grid item>
+        <MKButton
+          size="small"
+          startIcon={<Icon>comment</Icon>}
+          disabled={!isAuthed}
+          onClick={openComment}
+        >
+          Comment ({recipe.comments.length})
+        </MKButton>
+      </Grid>
+    </Grid>
+  )}
 
-            {isOwner && !editMode && (
-              <Grid container spacing={1} justifyContent="center" sx={{ mt: 1 }}>
-                <Grid item>
-                  <MKButton
-                    size="small"
-                    color="dark"
-                    variant="outlined"
-                    onClick={() => setEditMode(true)}
-                  >
-                    Edit
-                  </MKButton>
-                </Grid>
-                <Grid item>
-                  <MKButton
-                    size="small"
-                    color="error"
-                    variant="outlined"
-                    onClick={handleDelete}
-                  >
-                    Delete
-                  </MKButton>
-                </Grid>
-              </Grid>
-            )}
+  {/* 2. When owner & NOT editing: Edit + Delete */}
+  {!editMode && isOwner && (
+    <Grid container spacing={1} justifyContent="center" sx={{ mt: 1 }}>
+      <Grid item>
+        <MKButton
+          size="small"
+          color="dark"
+          variant="outlined"
+          onClick={() => setEditMode(true)}
+        >
+          Edit
+        </MKButton>
+      </Grid>
+      <Grid item>
+        <MKButton
+          size="small"
+          color="error"
+          variant="outlined"
+          onClick={handleDelete}
+        >
+          Delete
+        </MKButton>
+      </Grid>
+    </Grid>
+  )}
 
-            {editMode && (
-              <Grid container spacing={1} justifyContent="center" sx={{ mt: 1 }}>
-                <Grid item>
-                  <MKButton color="success" onClick={handleSave}>
-                    Save
-                  </MKButton>
-                </Grid>
-                <Grid item>
-                  <MKButton color="secondary" onClick={handleCancel}>
-                    Cancel
-                  </MKButton>
-                </Grid>
-              </Grid>
-            )}
-          </CardActions>
+  {/* 3. In edit mode (owner only): Save + Cancel; Like/Comment & Edit/Delete are hidden by the above */}
+  {editMode && isOwner && (
+    <Grid container spacing={1} justifyContent="center" sx={{ mt: 1 }}>
+      <Grid item>
+        <MKButton color="success" onClick={handleSave}>
+          Save
+        </MKButton>
+      </Grid>
+      <Grid item>
+        <MKButton color="secondary" onClick={() => setEditMode(false)}>
+          Cancel
+        </MKButton>
+      </Grid>
+    </Grid>
+  )}
+</CardActions>
+
         </RecipeCard>
 
           {/* Comments List */}

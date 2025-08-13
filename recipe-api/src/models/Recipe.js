@@ -27,10 +27,10 @@ const recipeSchema = new mongoose.Schema({
   },
   image: {
     type: String,
-    validate: {
-      validator: url => URL_REGEX.test(url),
-      message: props => `${props.value} is not a valid URL`
-    }
+    // validate: {
+    //   validator: url => URL_REGEX.test(url),
+    //   message: props => `${props.value} is not a valid URL`
+    // }
   },
   authorId:       { type: mongoose.Types.ObjectId, ref: 'User', required: true },
   averageRating:  { type: Number, default: 0, min: 0, max: 5 },

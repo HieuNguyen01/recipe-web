@@ -65,8 +65,6 @@ export function commentRecipe(recipeId, content) {
   return api.post(`/recipe/${recipeId}/comments`, { content });
 }
 
-export function likeRecipe(id) {
-  return api
-    .post(`/recipe/${id}/like`, {})
-    .then((res) => res.data);
+export function likeRecipe(recipeId) {
+  return request("post", `/recipe/${recipeId}/like`,{});
 }
