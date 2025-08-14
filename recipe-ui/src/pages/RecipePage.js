@@ -1,36 +1,15 @@
 // src/pages/RecipePage.js
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import {
-    Container,
-    Grid,
-    Card,
-    CardMedia,
-    CardContent,
-    CardActions,
-    Icon,
-    Divider,
-    Box,
-    Dialog,
-    DialogContent,
-    DialogActions,
-    TextField,
-    Link,
-    Typography,
-    Breadcrumbs
-} from "@mui/material";
+import { Container, Grid, Card, CardMedia, CardContent, CardActions, Icon, Divider, Box,
+    Dialog, DialogContent, DialogActions, TextField, Link,Typography, Breadcrumbs, CircularProgress} from "@mui/material";
 import { styled } from "@mui/material/styles";
 import MKBox from "components/MKBox";
 import MKTypography from "components/MKTypography";
 import MKButton from "components/MKButton";
 import MKInput from "components/MKInput";
-import {
-    getRecipeById,
-    updateRecipe,
-    deleteRecipe,
-    likeRecipe,
-    commentRecipe
-} from "services/api";
+import { getRecipeById, updateRecipe, deleteRecipe, likeRecipe, commentRecipe, uploadAvatar} from "services/api";
+
 //RecipeCard
 const RecipeCard = styled(Card)(({ theme }) => ({
     maxWidth: 800,
@@ -96,6 +75,11 @@ export default function RecipePage() {
     const [userId, setUserId] = useState("");
     const [commentDialog, setCommentDialog] = useState(false);
     const [newComment, setNewComment] = useState("");
+    const [imageFile, setImageFile] = useState(null);
+    const [isUploading, setIsUploading] = useState(false);
+    const [uploadError, setUploadError] = useState("");
+    const [isSaving, setIsSaving] = useState(false);
+    const [saveError, setSaveError] = useState("");
 
     // Load auth data
     useEffect(() => {
@@ -148,25 +132,77 @@ useEffect(() => {
         setDraft((d) => ({ ...d, [name]: value }));
     }
 
-    function handleSave() {
-      updateRecipe(id, draft)
-        .then(() => getRecipeById(id))   // fetch the complete doc
-        .then((fullRecipe) => {
-          setRecipe(fullRecipe);
-          setDraft({
-            ...fullRecipe,
-            author: fullRecipe.authorId.name
-          });
-          setEditMode(false);
-        })
-        .catch(console.error);
+  async function handleSave() {
+    setIsSaving(true);
+    setSaveError("");
+
+    try {
+      await updateRecipe(id, draft);
+      const fullRecipe = await getRecipeById(id);
+      setRecipe(fullRecipe);
+      setDraft({
+        ...fullRecipe,
+        author: fullRecipe.authorId.name
+      });
+      setEditMode(false);
+    } catch (err) {
+      console.error(err);
+      setSaveError("Failed to save recipe. Please try again.");
+    } finally {
+      setIsSaving(false);
     }
+  }
+
+async function handleImageChange(e) {
+  const file = e.target.files?.[0];
+  if (!file) return;
+
+  // reset previous errors
+  setUploadError("");
+
+  // 1) Validate file type
+  if (!file.type.startsWith("image/")) {
+    setUploadError("Please select a valid image file.");
+    return;
+  }
+
+  // 2) Validate file size (max 5MB)
+  const MAX_SIZE = 2 * 1024 * 1024;
+  if (file.size > MAX_SIZE) {
+    setUploadError("Image must be smaller than 5 MB.");
+    return;
+  }
+
+  // 3) Show local preview immediately
+  const previewUrl = URL.createObjectURL(file);
+  setDraft(d => ({ ...d, image: previewUrl }));
+  setIsUploading(true);
+
+  // 4) Convert to Data URI & upload
+  const reader = new FileReader();
+  reader.readAsDataURL(file);
+  reader.onload = async () => {
+    try {
+      const dataUrl = reader.result; // e.g. "data:image/png;base64,…"
+      const { avatar } = await uploadAvatar(recipe._id, dataUrl);
+
+      // server echoes back the same Data URI
+      setDraft(d => ({ ...d, image: avatar }));
+    } catch (err) {
+      console.error("Upload failed", err);
+      setUploadError(err.message || "Image upload failed. Please try again.");
+    } finally {
+      setIsUploading(false);
+      URL.revokeObjectURL(previewUrl);
+    }
+  };
+}
 
 
-    function handleCancel() {
-        setDraft(recipe);
-        setEditMode(false);
-    }
+    // function handleCancel() {
+    //     setDraft(recipe);
+    //     setEditMode(false);
+    // }
 
   function handleDelete() {
     if (window.confirm("Delete this recipe?")) {
@@ -241,27 +277,74 @@ useEffect(() => {
           {/* Row 1: Image (md4) & Title (md8) */}
           <Grid container alignItems="center" justifyContent="center" spacing={2} p={2}>
             <Grid item xs={12} md={4}>
-              {editMode ? (
-                <MKInput
-                  fullWidth
-                  name="image"
-                  value={draft.image}
-                  onChange={handleFieldChange}
-                />
-              ) : (
-                <CardMedia
-                  component="img"
-                  image={recipe.image}
-                  alt={recipe.title}
-                  sx={{
-                    width: 200,
-                    height: 200,
-                    objectFit: "cover",
-                    borderRadius: 1,
-                    mx: "auto"
-                  }}
-                />
-              )}
+                {editMode ? (
+                  <Box textAlign="center">
+                    {/* Live preview */}
+                    {draft.image && (
+                      <CardMedia
+                        component="img"
+                        image={draft.image}
+                        alt="Preview"
+                        sx={{
+                          width: 200,
+                          height: 200,
+                          objectFit: "cover",
+                          borderRadius: 1,
+                          mx: "auto",
+                          mb: 2,
+                        }}
+                      />
+                    )}
+
+                    {/* Hidden file input */}
+                    <input
+                      accept="image/*"
+                      type="file"
+                      id="recipe-image-upload"
+                      style={{ display: "none" }}
+                      onChange={handleImageChange}
+                    />
+
+                    {/* Upload button with spinner */}
+                    <label htmlFor="recipe-image-upload">
+                      <MKButton
+                        component="span"
+                        disabled={isUploading}
+                        sx={{ position: "relative" }}
+                      >
+                        {isUploading ? (
+                          <CircularProgress size={20} color="inherit" />
+                        ) : (
+                          "Upload Image"
+                        )}
+                      </MKButton>
+                    </label>
+
+                    {/* Validation / upload error message */}
+                    {uploadError && (
+                      <Typography
+                        variant="caption"
+                        color="error"
+                        sx={{ mt: 1, display: "block" }}
+                      >
+                        {uploadError}
+                      </Typography>
+                    )}
+                  </Box>
+                ) : (
+                  <CardMedia
+                    component="img"
+                    image={recipe.image}
+                    alt={recipe.title}
+                    sx={{
+                      width: 200,
+                      height: 200,
+                      objectFit: "cover",
+                      borderRadius: 1,
+                      mx: "auto",
+                    }}
+                  />
+                )}
             </Grid>
 
             <Grid item xs={12} md={8}>
@@ -569,20 +652,29 @@ useEffect(() => {
   )}
 
   {/* 3. In edit mode (owner only): Save + Cancel; Like/Comment & Edit/Delete are hidden by the above */}
-  {editMode && isOwner && (
-    <Grid container spacing={1} justifyContent="center" sx={{ mt: 1 }}>
-      <Grid item>
-        <MKButton color="success" onClick={handleSave}>
-          Save
-        </MKButton>
-      </Grid>
-      <Grid item>
-        <MKButton color="secondary" onClick={() => setEditMode(false)}>
-          Cancel
-        </MKButton>
-      </Grid>
-    </Grid>
-  )}
+              {editMode && isOwner && (
+                <Grid container spacing={1} justifyContent="center" sx={{ mt: 1 }}>
+                  <Grid item>
+                    <MKButton
+                      onClick={handleSave}
+                      disabled={isSaving}
+                    >
+                      {isSaving ? <CircularProgress size={20} /> : "Save"}
+                    </MKButton>
+
+                    {saveError && (
+                      <Typography variant="caption" color="error" sx={{ mt: 1 }}>
+                        {saveError}
+                      </Typography>
+                    )}
+                  </Grid>
+                  <Grid item>
+                    <MKButton color="secondary" onClick={() => setEditMode(false)}>
+                      Cancel
+                    </MKButton>
+                  </Grid>
+                </Grid>
+              )}
 </CardActions>
 
         </RecipeCard>

@@ -404,7 +404,7 @@ function toBuffer(image) {
 // POST /api/recipe/:id/avatar
 exports.createAvatar = async (req, res) => {
   try {
-    // 1) Find + auth
+    // Fetch + authorize
     const recipe = await Recipe.findById(req.params.id);
     if (!recipe) {
       return res.status(404).json({ message: 'Recipe not found' });
@@ -413,28 +413,43 @@ exports.createAvatar = async (req, res) => {
       return res.status(403).json({ message: 'Forbidden' });
     }
 
-    // 2) Validate incoming image string
+    // Validate data-URI format
     const { image } = req.body;
-    if (typeof image !== 'string' || !image.length) {
-      return res.status(400).json({ message: 'No image provided' });
+    if (
+      typeof image !== 'string' ||
+      !image.startsWith('data:image/') ||
+      !image.includes(';base64,')
+    ) {
+      return res.status(400).json({ message: 'Invalid image data' });
     }
 
-    // 3) Decode & write
+    // Parse out MIME + Base64 payload
+    const [meta, base64] = image.split(';base64,');
+    const mimeMatch = meta.match(/^data:(image\/[a-zA-Z0-9.+-]+)/);
+    if (!mimeMatch) {
+      return res.status(400).json({ message: 'Unsupported image MIME type' });
+    }
+    const mimeType = mimeMatch[1];                  // e.g. "image/png"
+    const ext      = mimeType.split('/')[1] === 'jpeg' 
+                     ? 'jpg' 
+                     : mimeType.split('/')[1];     // normalize "jpeg" → "jpg"
+
+    // Decode & write file
     let buffer;
     try {
-      buffer = toBuffer(image);
+      buffer = Buffer.from(base64, 'base64');
     } catch (err) {
-      return res.status(400).json({ message: err.message });
+      return res.status(400).json({ message: 'Corrupt Base64 payload' });
     }
 
     const dir      = path.join(__dirname, '../../app/storage/avatar');
-    const filename = `${req.params.id}.jpg`;
+    const filename = `${req.params.id}.${ext}`;
     const filePath = path.join(dir, filename);
 
     fs.mkdirSync(dir, { recursive: true });
     fs.writeFileSync(filePath, buffer);
 
-    // 4) Return both message + the avatar field your test expects
+    // Echo back the data-URI
     return res.status(200).json({
       message: 'Avatar uploaded',
       avatar: image
@@ -447,25 +462,25 @@ exports.createAvatar = async (req, res) => {
 };
 
 // GET /api/recipe/:id/avatar
-exports.getAvatar = async (req, res) => {
-  try {
-    // Build path to expected avatar
-    const filePath = path.join( __dirname, '../../app/storage/avatar', `${req.params.id}.jpg`);
+// exports.getAvatar = async (req, res) => {
+//   try {
+//     // Build path to expected avatar
+//     const filePath = path.join( __dirname, '../../app/storage/avatar', `${req.params.id}.jpg`);
 
-    if (!fs.existsSync(filePath)) {
-      return res.status(404).json({ message: 'Avatar not found' });
-    }
+//     if (!fs.existsSync(filePath)) {
+//       return res.status(404).json({ message: 'Avatar not found' });
+//     }
 
-    // Read file, convert to Base64 and return as JSON
-    const buffer = fs.readFileSync(filePath);
-    const base64 = buffer.toString('base64');
-    const dataUrl = `data:image/jpeg;base64,${base64}`;
+//     // Read file, convert to Base64 and return as JSON
+//     const buffer = fs.readFileSync(filePath);
+//     const base64 = buffer.toString('base64');
+//     const dataUrl = `data:image/jpeg;base64,${base64}`;
 
-    // Stream the file with correct header
-    // res.setHeader('Content-Type', 'image/jpeg');
-    return res.json({ avatar: dataUrl });
-  } catch (err) {
-    console.error('Error fetching avatar:', err);
-    return res.status(500).json({ message: 'Server error fetching avatar' });
-  }
-};
+//     // Stream the file with correct header
+//     // res.setHeader('Content-Type', 'image/jpeg');
+//     return res.json({ avatar: dataUrl });
+//   } catch (err) {
+//     console.error('Error fetching avatar:', err);
+//     return res.status(500).json({ message: 'Server error fetching avatar' });
+//   }
+// };

@@ -4,21 +4,29 @@ import React, { useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { styled, alpha } from "@mui/material/styles";
 import { Container, Grid, Card, CardMedia, TextField, CardContent, CardActions, Icon, Dialog,
-  DialogActions, DialogContent, Button, Box, Alert, Menu, MenuItem, Divider
+  DialogActions, DialogContent, Button, Box, Alert, Menu, MenuItem, Divider, Typography, CircularProgress
 } from "@mui/material";
 
 import MKBox from "components/MKBox";
 import MKTypography from "components/MKTypography";
 import MKInput from "components/MKInput";
 import MKButton from "components/MKButton";
-import MKPagination from "components/MKPagination";
 import EditIcon from "@mui/icons-material/Edit";
 import FileCopyIcon from "@mui/icons-material/FileCopy";
 import ArchiveIcon from "@mui/icons-material/Archive";
 import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
 import TablePagination from "@mui/material/TablePagination";
 
-import { getMe, getRecipes, login, register, setAuthToken, updateRecipe } from "services/api";
+import { getMe, getRecipes, login, register, setAuthToken, updateRecipe, uploadAvatar } from "services/api";
+
+const defaultEditData = {
+  id: "",
+  image: "",
+  title: "",
+  cookingTime: "",
+  ingredients: [],
+  instructions: []
+};
 
 // Styled Dialog for consistent padding
 const BootstrapDialog = styled(Dialog)(({ theme }) => ({
@@ -76,7 +84,7 @@ export default function HomePage() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [editOpen, setEditOpen]       = useState(false);
-  const [editData, setEditData]       = useState(null);
+  const [editData, setEditData]       = useState(defaultEditData);
   const [editError, setEditError]     = useState("");
 
   // Read from the URL
@@ -99,6 +107,12 @@ export default function HomePage() {
   const [mode, setMode] = useState("login"); // "login" | "register"
   const [successMessage, setSuccess] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
+
+  //image upload
+  const [imageFile, setImageFile] = useState(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadError, setUploadError] = useState("");
+
 
   // Keep local `page` in sync when the user clicks pagination
  useEffect(() => {
@@ -178,11 +192,17 @@ useEffect(() => {
     setMode("register");
     setErrorMessage("");
   };
-  const showSuccessAndClose = (msg, callback) => {
+  const showSuccessAndClose = (msg, callback, { shouldCloseDialog = true } = {}) => {
     setSuccess(msg);
     setTimeout(() => {
-      handleClose();
-      if (callback) callback();
+      if (shouldCloseDialog) {
+        handleClose();
+      } else {
+        setSuccess("");
+      }
+      if (callback) {
+        callback();
+      }
     }, 1500);
   };
   const showError = (msg, callback) => {
@@ -215,7 +235,7 @@ useEffect(() => {
       sessionStorage.setItem('userId', user._id || user.id);
       setUserName(user.name || "");
 
-      showSuccessAndClose("Login successful!", () => navigate());
+      showSuccessAndClose("Login successful!");
     } catch (err) {
       showError(err.response?.data?.message || "Login failed. Try again.");
     }
@@ -232,12 +252,12 @@ useEffect(() => {
         password: form.get("password"),
       });
       showSuccessAndClose(
-        "Registration successful! Please log in.",
-        switchToLogin
-      );
+      "Registration successful! Please log in.",
+      () => switchToLogin(),
+      { shouldCloseDialog: false }
+    );
     } catch (err) {
       console.error("Registration failed:", err);
-      // TODO: show error to user
     }
   };
 
@@ -264,31 +284,81 @@ useEffect(() => {
   };
 
 
-  // open the edit dialog with a deep‐copy of this recipe
+  // Open dialog and seed state
   const handleEditOpen = (recipe) => {
-    setEditData({
-      id: recipe.id,
-      image: recipe.image,
-      title: recipe.title,
-      cookingTime: recipe.cookingTime,
-      ingredients: JSON.parse(JSON.stringify(recipe.ingredients)),
-      instructions: [...recipe.instructions]
-    });
-    setEditError("");
+    setEditData({ ...defaultEditData, ...recipe });
     setEditOpen(true);
   };
 
   const handleEditClose = () => {
     setEditOpen(false);
-    setEditData(null);
+    setEditData(defaultEditData);
     setEditError("");
   };
 
   // Update a top‐level field
   const handleEditChange = (e) => {
     const { name, value } = e.target;
-    setEditData((d) => ({ ...d, [name]: value }));
+    setEditData((prev) => ({ ...prev, [name]: value }));  
   };
+
+  //image save
+  async function handleEditImageChange(e) {
+  const file = e.target.files?.[0];
+  if (!file) return;
+
+  // reset any prior errors
+  setUploadError("");
+
+  // 1) Validate file type
+  if (!file.type.startsWith("image/")) {
+    setUploadError("Please select a valid image file.");
+    return;
+  }
+
+  // 2) Validate file size (max 2 MB here, adjust as needed)
+  const MAX = 2 * 1024 * 1024;
+  if (file.size > MAX) {
+    setUploadError("Image must be smaller than 2 MB.");
+    return;
+  }
+
+  // 3) Show client‐side preview immediately
+  const previewUrl = URL.createObjectURL(file);
+  setEditData((d) => ({ ...d, image: previewUrl }));
+  setIsUploading(true);
+
+  // 4) Convert to Base64 data-URI
+  const reader = new FileReader();
+  reader.readAsDataURL(file);
+  reader.onload = async () => {
+    const dataUrl = reader.result; // "data:image/png;base64,AAA…"
+
+    try {
+      // 5) POST JSON { image: dataUrl } to /api/recipe/:id/avatar
+      const { avatar } = await uploadAvatar(editData.id, dataUrl);
+
+      // 6) Server echoes back the data-URI—persist it in state
+      setEditData((d) => ({ ...d, image: avatar }));
+    } catch (err) {
+      console.error("Image upload failed:", err);
+      setUploadError(
+        err?.response?.data?.message ||
+        err?.message ||
+        "Image upload failed. Please try again."
+      );
+    } finally {
+      setIsUploading(false);
+      URL.revokeObjectURL(previewUrl);
+    }
+  };
+
+  reader.onerror = () => {
+    setIsUploading(false);
+    setUploadError("Failed to read the file. Please try a different image.");
+  };
+}
+
 
   // Ingredient helpers
   const handleIngredientChange = (i, field, value) => {
@@ -338,8 +408,18 @@ useEffect(() => {
         ingredients: editData.ingredients,
         instructions: editData.instructions,
       });
+      console.log("Saving recipe:", editData);
       // Refresh list or refetch
-      setPage(1);  // or call getRecipes again
+      await getRecipes({
+        page: page + 1,
+        limit: rowsPerPage,
+        title: searchTerm,
+        ingredient: searchTerm
+      })
+        .then(({ recipes: data, pagination }) => {
+          setRecipes(data);
+          setTotalPages(pagination.total);
+        })
       handleEditClose();
     } catch (err) {
       setEditError(err.response?.data?.message || "Save failed");
@@ -704,15 +784,60 @@ useEffect(() => {
             </Alert>
           )}
 
-          {/* Image URL */}
-          <MKInput
-            name="image"
-            label="Image URL"
-            value={editData?.image || ""}
-            onChange={handleEditChange}
-            fullWidth
-            sx={{ mb: 2 }}
-          />
+          {/* Image Upload */}
+          <Box textAlign="center" sx={{ mb: 2 }}>
+            {/* Preview */}
+            {editData.image && (
+              <CardMedia
+                component="img"
+                image={editData.image}
+                alt="Preview"
+                sx={{
+                  width: 200,
+                  height: 200,
+                  objectFit: "cover",
+                  borderRadius: 1,
+                  mx: "auto",
+                  mb: 1,
+                }}
+              />
+            )}
+
+            {/* Hidden file input */}
+            <input
+              accept="image/*"
+              type="file"
+              id="edit-recipe-image-upload"
+              style={{ display: "none" }}
+              onChange={handleEditImageChange}
+            />
+
+            {/* Upload button */}
+            <label htmlFor="edit-recipe-image-upload">
+              <MKButton
+                component="span"
+                disabled={isUploading}
+                sx={{ position: "relative" }}
+              >
+                {isUploading ? (
+                  <CircularProgress size={20} color="inherit" />
+                ) : (
+                  "Change Image"
+                )}
+              </MKButton>
+            </label>
+
+            {/* Error message */}
+            {uploadError && (
+              <Typography
+                variant="caption"
+                color="error"
+                sx={{ display: "block", mt: 1 }}
+              >
+                {uploadError}
+              </Typography>
+            )}
+          </Box>
 
           {/* Title */}
           <MKInput

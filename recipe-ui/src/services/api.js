@@ -70,25 +70,21 @@ export function likeRecipe(recipeId) {
   return request("post", `/recipe/${recipeId}/like`,{});
 }
 
-export async function uploadAvatar(recipeId, file) {
-  const form = new FormData();
-  form.append('image', file);
-
-  const res = await api.post(
+export async function uploadAvatar(recipeId, dataUrl) {
+  return api.post(
     `/recipe/${recipeId}/avatar`,
-    form,
+    { image: dataUrl },
     {
       headers: {
-        'Content-Type': 'multipart/form-data',
-        Authorization: `Bearer ${sessionStorage.getItem('token')}`,
-      }
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${sessionStorage.getItem("token")}`,
+      },
     }
-  );
-  return res.data;
+  ).then(res => res.data);
 }
 
-export async function fetchAvatar(recipeId) {
-  // GET returns JSON { avatar: "data:image/…base64,XXX" }
-  const { data } = await api.get(`/recipe/${recipeId}/avatar`);
-  return data.avatar;
-}
+// export async function fetchAvatar(recipeId) {
+//   // GET returns JSON { avatar: "data:image/…base64,XXX" }
+//   const { data } = await api.get(`/recipe/${recipeId}/avatar`);
+//   return data.avatar;
+// }
