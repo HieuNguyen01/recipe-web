@@ -1,18 +1,43 @@
 const express  = require('express');
 const mongoose = require('mongoose');
+const multer   = require('multer');
+const path     = require('path');
+const fs       = require('fs');
 const router   = express.Router();
 const auth     = require('../middleware/auth');
-const {
-  createRecipe,
-  getRecipes,
-  getRecipeById,
-  updateRecipe,
-  deleteRecipe,
-  rateRecipe,
-  likeRecipe
+const { createRecipe, getRecipes, getRecipeById, updateRecipe,
+  deleteRecipe, rateRecipe, likeRecipe, createAvatar, getAvatar
 } = require('../controllers/recipeController');
 const optionalAuth  = require('../middleware/optionalAuth');
 const { addComment, getAllComments, updateComment, deleteComment } = require('../controllers/commentController');
+
+// // ─── Multer configuration for avatars ────────────────────────────────
+// const AVATAR_DIR = path.join(__dirname, '../../app/storage/avatar');
+// const avatarStorage = multer.diskStorage({
+//    destination(req, file, cb) {
+//    // ensure folder exists
+//    fs.mkdirSync(AVATAR_DIR, { recursive: true });
+//    cb(null, AVATAR_DIR);
+//    },
+//    filename(req, file, cb) {
+//    // always save as {recipeId}.jpg
+//    cb(null, `${req.params.id}.jpg`);
+//    }
+// });
+
+// const avatarUpload = multer({
+//   storage: avatarStorage,
+//   limits: { fileSize: 2 * 1024 * 1024 }, // 2MB
+//   fileFilter(req, file, cb) {
+//     const allowed = ['image/jpeg', 'image/png', 'image/webp'];
+//     if (allowed.includes(file.mimetype)) {
+//       cb(null, true);
+//     } else {
+//         cb(new Error('Unsupported file type. Only JPG, PNG, WEBP allowed.'));
+//     }
+//   }
+// });
+
 
 /* ──────────────────────────────────────────── */
 /*                  HELPERS                     */
@@ -133,6 +158,22 @@ router.delete(
   validateObjectId('recipeId'),
   validateObjectId('commentId'),
   deleteComment
+);
+
+// ── Recipe avatar endpoints ─────────────────────────────────────────────
+router.post(
+  '/:id/avatar',
+  auth,
+  validateObjectId('id'),
+  express.json(),      // parse JSON bodies
+  createAvatar
+);
+
+// Fetch avatar
+router.get(
+  '/:id/avatar',
+  validateObjectId('id'),
+  getAvatar
 );
 
 module.exports = router;

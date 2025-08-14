@@ -2,15 +2,19 @@ require('dotenv').config();
 
 const express       = require('express');
 const cors = require("cors");
+const path    = require('path');
+const fs      = require('fs');
 const listEndpoints = require('express-list-endpoints');
 const connectDB     = require('./config/db');
 const authRoutes    = require('./routes/auth');
 const recipesRoutes = require('./routes/recipe');
 const usersRoutes   = require('./routes/user');
-// const commentRoutes = require('./routes/comment'); // now mounted via recipe routes
 
 const app = express();
-// Allow your React origin (or use '*' for all)
+
+const AVATAR_DIR = path.join(__dirname, 'app/storage/avatar');
+fs.mkdirSync(AVATAR_DIR, { recursive: true });
+
 app.use(cors({
   origin: 'http://localhost:3000',
   methods: ['GET','POST','PUT','DELETE','OPTIONS'],

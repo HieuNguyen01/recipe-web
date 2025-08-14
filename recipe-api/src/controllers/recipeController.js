@@ -1,5 +1,7 @@
 const mongoose = require('mongoose');
 const { ObjectId } = mongoose.mongo;
+const fs     = require('fs');
+const path   = require('path');
 const Recipe = require('../models/Recipe');
 const Rating = require('../models/Rating');
 const Like   = require('../models/Like');
@@ -383,5 +385,87 @@ exports.likeRecipe = async (req, res) => {
   } catch (err) {
     console.error('likeRecipe error:', err);
     return res.status(500).json({ message: 'Server error toggling like' });
+  }
+};
+
+// helper to pull out the real base64 payload
+function toBuffer(image) {
+  // If it’s a data URI, strip the prefix
+  const match = image.match(/^data:(.+);base64,(.*)$/);
+  const payload = match ? match[2] : image;
+
+  // Ensure it’s valid Base64 (simple check)
+  if (!/^[A-Za-z0-9+/=]+\s*$/.test(payload)) {
+    throw new Error('Invalid Base64 payload');
+  }
+  return Buffer.from(payload, 'base64');
+}
+
+// POST /api/recipe/:id/avatar
+exports.createAvatar = async (req, res) => {
+  try {
+    // 1) Find + auth
+    const recipe = await Recipe.findById(req.params.id);
+    if (!recipe) {
+      return res.status(404).json({ message: 'Recipe not found' });
+    }
+    if (recipe.authorId.toString() !== req.user.id) {
+      return res.status(403).json({ message: 'Forbidden' });
+    }
+
+    // 2) Validate incoming image string
+    const { image } = req.body;
+    if (typeof image !== 'string' || !image.length) {
+      return res.status(400).json({ message: 'No image provided' });
+    }
+
+    // 3) Decode & write
+    let buffer;
+    try {
+      buffer = toBuffer(image);
+    } catch (err) {
+      return res.status(400).json({ message: err.message });
+    }
+
+    const dir      = path.join(__dirname, '../../app/storage/avatar');
+    const filename = `${req.params.id}.jpg`;
+    const filePath = path.join(dir, filename);
+
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(filePath, buffer);
+
+    // 4) Return both message + the avatar field your test expects
+    return res.status(200).json({
+      message: 'Avatar uploaded',
+      avatar: image
+    });
+
+  } catch (err) {
+    console.error('Upload error:', err);
+    return res.status(500).json({ message: err.message });
+  }
+};
+
+// GET /api/recipe/:id/avatar
+exports.getAvatar = async (req, res) => {
+  try {
+    // Build path to expected avatar
+    const filePath = path.join( __dirname, '../../app/storage/avatar', `${req.params.id}.jpg`);
+
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ message: 'Avatar not found' });
+    }
+
+    // Read file, convert to Base64 and return as JSON
+    const buffer = fs.readFileSync(filePath);
+    const base64 = buffer.toString('base64');
+    const dataUrl = `data:image/jpeg;base64,${base64}`;
+
+    // Stream the file with correct header
+    // res.setHeader('Content-Type', 'image/jpeg');
+    return res.json({ avatar: dataUrl });
+  } catch (err) {
+    console.error('Error fetching avatar:', err);
+    return res.status(500).json({ message: 'Server error fetching avatar' });
   }
 };

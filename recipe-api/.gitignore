@@ -1,2 +1,2 @@
 # ignore uploads and other runtime files
-/storage/
+#/storage/
