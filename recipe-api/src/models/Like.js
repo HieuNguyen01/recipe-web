@@ -3,16 +3,8 @@ const mongoose = require('mongoose');
 const { Schema } = mongoose;
 
 const likeSchema = new Schema({
-  user: {
-    type: Schema.Types.ObjectId,
-    ref: 'User',
-    required: true
-  },
-  recipe: {
-    type: Schema.Types.ObjectId,
-    ref: 'Recipe',
-    required: true
-  }
+  user: { type: Schema.Types.ObjectId, ref: 'User', required: true},
+  recipe: { type: Schema.Types.ObjectId, ref: 'Recipe', required: true}
 },
 {
   timestamps: true

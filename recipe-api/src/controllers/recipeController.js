@@ -205,7 +205,7 @@ exports.getRecipeById = async (req, res, next) => {
       .lean({ virtuals: true });
 
     if (!recipe) return res.sendStatus(404);
-    // rename each comment.authorId → comment.author
+    // fix comment.authorId → comment.author
     recipe.comments = recipe.comments.map(c => {
       c.author = c.authorId;
       delete c.authorId;
@@ -338,8 +338,7 @@ exports.rateRecipe = async (req, res) => {
  * Private – toggle a like, recalc total likes
  */
 exports.likeRecipe = async (req, res) => {
-  const { id: recipeId } = req.params;
-
+  const recipeId = req.params.id;
   try {
     // Try to remove existing like
     const removed = await Like.findOneAndDelete({

@@ -333,7 +333,7 @@ const handleLoginSubmit = async (e) => {
     }
 
     // 2) Validate file size (max 2 MB here, adjust as needed)
-    const MAX = 2 * 1024 * 1024;
+    const MAX = 3 * 1024 * 1024;
     if (file.size > MAX) {
       setUploadError("Image must be smaller than 2 MB.");
       return;

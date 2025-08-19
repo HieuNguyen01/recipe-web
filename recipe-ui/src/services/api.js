@@ -23,7 +23,7 @@ export function setAuthToken(token) {
 
 // 3) Low-level request helper.
 //    Always returns response.data
-async function request(method, url, data = null, config = {}) {
+async function request(method, url, data = {}, config = {}) {
   const response = await api({ method, url, data, ...config });
   return response.data;
 }
@@ -86,22 +86,22 @@ export function deleteRecipe(id) {
   return request("delete", `/recipe/${id}`);
 }
 
-export async function commentRecipe(recipeId, content) {
-  const resp = await api.post(`/recipe/${recipeId}/comments`, { content });
+export async function commentRecipe(id, content) {
+  const resp = await api.post(`/recipe/${id}/comments`, { content });
   // server returns { success, message, data: { …comment }, meta:… }
   return resp.data.data;
 }
 
 
-export function likeRecipe(recipeId) {
-  return request("post", `/recipe/${recipeId}/like`);
+export function likeRecipe(id) {
+  return request("post", `/recipe/${id}/like`);
 }
 
-export function rateRecipe(recipeId, value) {
-  return request("post", `/recipe/${recipeId}/rate`, { value });
+export function rateRecipe(id, value) {
+  return request("post", `/recipe/${id}/rate`, { value });
 }
 
-export async function uploadAvatar(recipeId, dataUrl) {
+export async function uploadAvatar(id, dataUrl) {
   // headers already set globally via setAuthToken
-  return request("post", `/recipe/${recipeId}/avatar`, { image: dataUrl });
+  return request("post", `/recipe/${id}/avatar`, { image: dataUrl });
 }

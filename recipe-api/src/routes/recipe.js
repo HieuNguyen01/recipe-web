@@ -119,8 +119,8 @@ router.post('/:id/like', auth, validateObjectId('id'), likeRecipe);
  * Public – list comments for a recipe
  */
 router.get(
-  '/:recipeId/comments',
-  validateObjectId('recipeId'),
+  '/:id/comments',
+  validateObjectId('id'),
   getAllComments
 );
 
@@ -129,9 +129,9 @@ router.get(
  * Private – add a comment
  */
 router.post(
-  '/:recipeId/comments',
+  '/:id/comments',
   auth,
-  validateObjectId('recipeId'),
+  validateObjectId('id'),
   validateCommentContent,
   addComment
 );
@@ -141,9 +141,9 @@ router.post(
  * Private - update comment
  */
 router.put(
-  '/:recipeId/comments/:commentId',
+  '/:id/comments/:commentId',
   auth,
-  validateObjectId('recipeId'),
+  validateObjectId('id'),
   validateCommentContent,
   updateComment
 );
@@ -153,9 +153,9 @@ router.put(
  * Private – delete a comment
  */
 router.delete(
-  '/:recipeId/comments/:commentId',
+  '/:id/comments/:commentId',
   auth,
-  validateObjectId('recipeId'),
+  validateObjectId('id'),
   validateObjectId('commentId'),
   deleteComment
 );

@@ -4,7 +4,7 @@ const { success, error } = require('../utils/response');
 
 exports.addComment = async (req, res, next) => {
   const authorId = req.user.id;
-  const recipeId = req.params.recipeId;
+  const recipeId = req.params.id;
   const { content } = req.body;
 
   try {
