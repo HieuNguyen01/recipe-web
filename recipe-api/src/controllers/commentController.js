@@ -1,5 +1,6 @@
 const Comment = require('../models/Comment');
-const Recipe  = require('../models/Recipe');
+const Recipe = require('../models/Recipe');
+const { success, error } = require('../utils/response');
 
 exports.addComment = async (req, res, next) => {
   const authorId = req.user.id;
@@ -7,36 +8,33 @@ exports.addComment = async (req, res, next) => {
   const { content } = req.body;
 
   try {
-    // 1) Ensure recipe exists
+    // Ensure recipe exists
     const recipe = await Recipe.findById(recipeId);
     if (!recipe) {
-      return res.status(404).json({ message: 'Recipe not found' });
+      return error(res, 404, 'Recipe not found', 'RECIPE_NOT_FOUND');
     }
 
-    // 2) Create the comment
+    // Create the comment
     let comment = await Comment.create({
       authorId,
-      recipe:  recipeId,
+      recipe: recipeId,
       content: content.trim(),
     });
 
-    // 3) Populate authorId → { _id, name } and convert to POJO
+    // Populate authorId → { _id, name } and convert to POJO
     comment = await comment.populate('authorId', 'name');
     comment = comment.toObject();
 
     comment.author = comment.authorId;
     delete comment.authorId;
-    // 5) Return the new comment under a clear key
-    return res.status(201).json({ data: comment });
+    // Return the new comment under a clear key
+    return success(res, 'Comment added', comment);
   } catch (err) {
-    console.error('Error adding comment:', err);
-    return res.status(500).json({ message: 'Server error adding comment' });
+    console.error('addComment error:', err);
+    return error(res, 500, 'Server error adding comment');
   }
 };
 
-/**
- * PUT /api/recipes/:recipeId/comments/:commentId
- */
 exports.updateComment = async (req, res) => {
   const authorId = req.user.id;
   const { recipeId, commentId } = req.params;
@@ -46,25 +44,24 @@ exports.updateComment = async (req, res) => {
     // fetch
     const comment = await Comment.findById(commentId);
     if (!comment || comment.recipe.toString() !== recipeId) {
-      return res.status(404).json({ message: 'Comment not found' });
+      return error(res, 404, 'Comment not found', 'COMMENT_NOT_FOUND');
     }
 
     // authorize
     if (comment.author.toString() !== authorId) {
-      return res.status(403).json({ message: 'Not allowed to edit this comment' });
+      return error(res, 403, 'Not allowed to edit this comment', 'UNAUTHORIZED_COMMENT');
     }
 
     // save
-    comment.content   = trimmed;
+    comment.content = trimmed;
     comment.updatedAt = Date.now();
     await comment.save();
 
     await comment.populate('author', 'name');
-    return res.json({ data: comment });
-
+    return success(res, 'Comment updated', comment);
   } catch (err) {
-    console.error('Error updating comment:', err);
-    return res.status(500).json({ message: 'Server error updating comment' });
+    console.error('updateComment error:', err);
+    return error(res, 500, 'Server error updating comment');
   }
 };
 
@@ -77,29 +74,29 @@ exports.getAllComments = async (req, res) => {
       .populate('author', 'name')
       .sort({ createdAt: -1 });
 
-    return res.json({ data: comments });
+    return success(res, 'Comments fetched', comments);
   } catch (err) {
-    console.error('Error fetching comments:', err);
-    return res.status(500).json({ message: 'Server error fetching comments' });
+    console.error('getAllComments error:', err);
+    return error(res, 500, 'Server error fetching comments');
   }
 };
 
 exports.deleteComment = async (req, res) => {
-  const authorId    = req.user.id;
+  const authorId = req.user.id;
   const { recipeId, commentId } = req.params;
 
   try {
     const comment = await Comment.findById(commentId);
     if (!comment || comment.recipe.toString() !== recipeId) {
-      return res.status(404).json({ message: 'Comment not found' });
+      return error(res, 404, 'Comment not found', 'COMMENT_NOT_FOUND');
     }
     if (comment.author.toString() !== authorId) {
-      return res.status(403).json({ message: 'Not allowed to delete this comment' });
+      return error(res, 403, 'Not allowed to delete this comment', 'UNAUTHORIZED_COMMENT');
     }
     await comment.deleteOne();
-    return res.json({ message: 'Comment deleted' });
+    return success(res, 'Comment deleted');
   } catch (err) {
     console.error('Error deleting comment:', err);
-    return res.status(500).json({ message: 'Server error deleting comment' });
+    return error(res, 500, 'Server error deleting comment');
   }
 };

@@ -170,10 +170,10 @@ router.post(
 );
 
 // Fetch avatar
-router.get(
-  '/:id/avatar',
-  validateObjectId('id'),
-  getAvatar
-);
+// router.get(
+//   '/:id/avatar',
+//   validateObjectId('id'),
+//   getAvatar
+// );
 
 module.exports = router;

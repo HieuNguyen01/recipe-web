@@ -1,13 +1,18 @@
-// src/services/api.js
 import axios from "axios";
 
-// 1. Create an axios instance
+// 1) Create Axios instance
 const api = axios.create({
   baseURL: process.env.REACT_APP_API_URL || "http://localhost:5500/api",
   headers: { "Content-Type": "application/json" }
 });
 
-// 2. Utility to set/remove auth token
+api.interceptors.request.use(config => {
+  console.log(`[API] ${config.method.toUpperCase()} ${config.url}`);
+  console.log("     Headers:", config.headers.Authorization);
+  return config;
+});
+
+// 2) Manage the default Authorization header
 export function setAuthToken(token) {
   if (token) {
     api.defaults.headers.common["Authorization"] = `Bearer ${token}`;
@@ -16,75 +21,87 @@ export function setAuthToken(token) {
   }
 }
 
-// 3. Lightweight request wrapper
-//    method: 'get' | 'post' | 'put' | 'delete', etc.
-//    url: endpoint path (e.g. '/recipe')
-//    data: request body for POST/PUT
-//    config: additional axios config (e.g. { params })
-function request(method, url, data = null, config = {}) {
-  return api({ method, url, data, ...config }).then(response => response.data);
+// 3) Low-level request helper.
+//    Always returns response.data
+async function request(method, url, data = null, config = {}) {
+  const response = await api({ method, url, data, ...config });
+  return response.data;
 }
 
-// 4. Public endpoints
-export function getRecipes({ page = 1, limit = 3, title, ingredient } = {}) {
-  const params = { page, limit, ...(title && { title }), ...(ingredient && { ingredient }) };
+// 4) Public endpoints
+
+// FETCH recipes (no pagination on server, client-side only)
+export async function getRecipes({ title, ingredient } = {}) {
+  const params = { ...(title && { title }), ...(ingredient && { ingredient }) };
+  // server returns { recipes: [ ... ] }
   return request("get", "/recipe", null, { params });
 }
 
-// fetch single recipe by id
-export function getRecipeById(id) {
-  return api.get(`/recipe/${id}`).then((res) => res.data);
+export async function getRecipeById(id) {
+  // server returns { success, message, data: {...} } or old shape
+  return api.get(`/recipe/${id}`).then(res => res.data);
 }
 
-export function register(data) {
-  return request("post", "/auth/register", data);
+// AUTHENTICATION
+
+export async function register(data) {
+  // server returns { success, message, data: { token } }
+  const { data: payload } = await api.post("/auth/register", data);
+  const token = payload.token;
+  setAuthToken(token);
+  return payload;
 }
 
-export function login(credentials) {
-  return request("post", "/auth/login", credentials);
+export async function login(credentials) {
+  const response = await api.post('/auth/login', credentials);
+  // Return the nested data object so callers can do { token }
+  return response.data.data;
 }
 
-export function getMe() {
-  return request("get", "/user/me");
+// export async function login(credentials) {
+//   // server returns { success, message, data: { token } }
+//   const { data: payload } = await api.post("/auth/login", credentials);
+//   const token = payload.token;
+//   setAuthToken(token);
+//   return payload;
+// }
+
+export async function getMe() {
+  // server returns { success, message, data: { ...user } }
+  const response = await api.get("/user/me");
+  // if your server wraps user in response.data.data:
+  return response.data.data;
 }
 
-// 5. Protected endpoints (call setAuthToken first)
+// PROTECTED ENDPOINTS
+// (these now all pick up the Authorization header automatically)
+
 export function createRecipe(data) {
   return request("post", "/recipe", data);
 }
-
 export function updateRecipe(id, data) {
   return request("put", `/recipe/${id}`, data);
 }
-
 export function deleteRecipe(id) {
-  return request("delete", `/recipe/${id}`, {});
+  return request("delete", `/recipe/${id}`);
 }
 
-
-export function commentRecipe(recipeId, content) {
-  return api.post(`/recipe/${recipeId}/comments`, { content });
+export async function commentRecipe(recipeId, content) {
+  const resp = await api.post(`/recipe/${recipeId}/comments`, { content });
+  // server returns { success, message, data: { …comment }, meta:… }
+  return resp.data.data;
 }
+
 
 export function likeRecipe(recipeId) {
-  return request("post", `/recipe/${recipeId}/like`,{});
+  return request("post", `/recipe/${recipeId}/like`);
+}
+
+export function rateRecipe(recipeId, value) {
+  return request("post", `/recipe/${recipeId}/rate`, { value });
 }
 
 export async function uploadAvatar(recipeId, dataUrl) {
-  return api.post(
-    `/recipe/${recipeId}/avatar`,
-    { image: dataUrl },
-    {
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${sessionStorage.getItem("token")}`,
-      },
-    }
-  ).then(res => res.data);
+  // headers already set globally via setAuthToken
+  return request("post", `/recipe/${recipeId}/avatar`, { image: dataUrl });
 }
-
-// export async function fetchAvatar(recipeId) {
-//   // GET returns JSON { avatar: "data:image/…base64,XXX" }
-//   const { data } = await api.get(`/recipe/${recipeId}/avatar`);
-//   return data.avatar;
-// }

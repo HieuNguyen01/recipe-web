@@ -1,12 +1,13 @@
 // src/pages/HomePage.js
 
-import React, { useState, useEffect } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import React, { useState, useEffect, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import { styled, alpha } from "@mui/material/styles";
-import { Container, Grid, Card, CardMedia, TextField, CardContent, CardActions, Icon, Dialog,
-  DialogActions, DialogContent, Button, Box, Alert, Menu, MenuItem, Divider, Typography, CircularProgress
+import {
+  Container, Grid, Card, CardMedia, TextField, CardContent, CardActions, Icon, Dialog, DialogTitle,DialogActions,
+  DialogContent, Button, Box, Alert, Menu, MenuItem, Divider, Typography, CircularProgress, TablePagination
 } from "@mui/material";
-
+import { useSnackbar } from 'notistack';
 import MKBox from "components/MKBox";
 import MKTypography from "components/MKTypography";
 import MKInput from "components/MKInput";
@@ -15,7 +16,7 @@ import EditIcon from "@mui/icons-material/Edit";
 import FileCopyIcon from "@mui/icons-material/FileCopy";
 import ArchiveIcon from "@mui/icons-material/Archive";
 import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
-import TablePagination from "@mui/material/TablePagination";
+
 
 import { getMe, getRecipes, login, register, setAuthToken, updateRecipe, uploadAvatar } from "services/api";
 
@@ -82,23 +83,20 @@ const StyledMenu = styled((props) => (
 
 export default function HomePage() {
   const navigate = useNavigate();
-  const [searchParams, setSearchParams] = useSearchParams();
-  const [editOpen, setEditOpen]       = useState(false);
-  const [editData, setEditData]       = useState(defaultEditData);
-  const [editError, setEditError]     = useState("");
+  const [editOpen, setEditOpen] = useState(false);
+  const [editData, setEditData] = useState(defaultEditData);
+  const [editError, setEditError] = useState("");
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
-  // Read from the URL
-  const pageParam = parseInt(searchParams.get("page") || "1", 10);
-  const titleParam = searchParams.get("title") || "";
-  const ingredientParam = searchParams.get("ingredient") || "";
-  // const limit = 3;
+  // full data set from server
+  const [allRecipes, setAllRecipes] = useState([]);
 
-  // recipes + pagination
-  const [recipes, setRecipes] = useState([]);
-  const [page, setPage] = useState(pageParam);
-  const [totalPages, setTotalPages] = useState(1);
-  const [searchTerm, setSearchTerm] = useState(titleParam || ingredientParam);
-  const [rowsPerPage, setRowsPerPage] = useState(parseInt(searchParams.get("limit") || "3", 10));
+  // text filter
+  const [searchTerm, setSearchTerm] = useState("");
+
+  // pagination
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(3);
 
   // auth + modal + user info
   const [authTokenState, setAuthTokenState] = useState("");
@@ -109,73 +107,78 @@ export default function HomePage() {
   const [errorMessage, setErrorMessage] = useState("");
 
   //image upload
-  const [imageFile, setImageFile] = useState(null);
+  // const [imageFile, setImageFile] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
 
+  const { enqueueSnackbar } = useSnackbar();
 
-  // Keep local `page` in sync when the user clicks pagination
- useEffect(() => {
-    setSearchParams((params) => {
-      params.set("page", String(page + 1));
-      params.set("limit", String(rowsPerPage));
-      params.set("title", searchTerm);
-      params.set("ingredient", searchTerm);
-      return params;
-    });
-  }, [page, rowsPerPage]);
-
-  // Debounced searchTerm → reset to first page
+  //initial load
   useEffect(() => {
-    const timeout = setTimeout(() => {
-      setPage(0);
-      setSearchParams((params) => {
-        params.set("page", "1");
-        params.set("limit", String(rowsPerPage));
-        params.set("title", searchTerm);
-        params.set("ingredient", searchTerm);
-        return params;
-      });
-    }, 500);
-    return () => clearTimeout(timeout);
-  }, [searchTerm]);
+  const token = sessionStorage.getItem("token");
+  const user  = JSON.parse(sessionStorage.getItem("user") || "{}");
 
+  if (!token) return;
 
-  // Whenever page, title, or ingredient in the URL changes, re-fetch
-useEffect(() => {
-    getRecipes({
-      page:      page + 1,
-      limit:     rowsPerPage,
-      title:     searchTerm,
-      ingredient: searchTerm
-    })
-      .then(({ recipes: data, pagination }) => {
-        setRecipes(data);
-        setTotalPages(pagination.total);
+  // 1) apply token to axios
+  setAuthToken(token);
+
+  // 2) flip “logged in” flag
+  setAuthTokenState(token);
+
+  // load name from storage
+  if (user.name) {
+    setUserName(user.name);
+  } else {
+    //fetch fresh
+    getMe()
+      .then(me => {
+        sessionStorage.setItem("user", JSON.stringify(me));
+        setUserName(me.name);
       })
-      .catch(err => console.error("Fetch recipes error:", err));
-  }, [page, rowsPerPage, searchTerm,authTokenState]);
-
-
-  // initial load: grab token & user from sessionStorage
-  useEffect(() => {
-    const token = sessionStorage.getItem("token");
-    const user = JSON.parse(sessionStorage.getItem("user") || "{}");
-
-    if (token) {
-      setAuthTokenState(token);
-      setAuthToken(token);
-      if (user.name) setUserName(user.name);
+      .catch(() => {
+        setAuthToken(null);
+        setAuthTokenState("");
+        sessionStorage.removeItem("token");
+        sessionStorage.removeItem("user");
+      });
     }
   }, []);
- 
-  // Handlers for MUI TablePagination
-  const handleChangePage = (_, newPage) => setPage(newPage);
-  const handleChangeRowsPerPage = (event) => {
-    const newLimit = parseInt(event.target.value, 10);
-    setRowsPerPage(newLimit);
-    setPage(0);
-  };
+
+  //autosearch after user stops typing
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      getRecipes({ title: searchTerm, ingredient: searchTerm })
+        .then(({ recipes }) => {
+          setAllRecipes(recipes);
+          setPage(0); // reset when new search arrives
+        })
+        .catch(err => console.error("Fetch error:", err));
+    }, 500);
+    return () => clearTimeout(handler);
+  }, [searchTerm, authTokenState]);
+
+  // filter by searchTerm tokens
+  const filteredRecipes = useMemo(() => {
+    const tokens = searchTerm.trim().split(/\s+/).filter(Boolean);
+    if (!tokens.length) return allRecipes;
+    return allRecipes.filter(r =>
+      tokens.every(tok =>
+        r.title.toLowerCase().includes(tok.toLowerCase()) ||
+        r.ingredients.some(i =>
+          i.name.toLowerCase().includes(tok.toLowerCase())
+        )
+      )
+    );
+  }, [allRecipes, searchTerm]);
+
+  // slice for current page
+  const paginatedRecipes = useMemo(() => {
+    const start = page * rowsPerPage;
+    return filteredRecipes.slice(start, start + rowsPerPage);
+  }, [filteredRecipes, page, rowsPerPage]);
+
+
 
   // dialog controls
   const handleOpen = () => setOpen(true);
@@ -203,7 +206,7 @@ useEffect(() => {
       if (callback) {
         callback();
       }
-    }, 1500);
+    }, 1000);
   };
   const showError = (msg, callback) => {
     setErrorMessage(msg);
@@ -212,34 +215,47 @@ useEffect(() => {
       if (callback) callback();
     }, 1000);
   };
-  
-  // LOGIN
-  const handleLoginSubmit = async (e) => {
-    e.preventDefault();
-    const form = new FormData(e.currentTarget);
-    try {
-      // 1) Log in
-      const { token } = await login({
-        email: form.get("email"),
-        password: form.get("password"),
-      });
 
-      // 2) persist & apply
-      sessionStorage.setItem("token", token);
-      setAuthToken(token);
-      setAuthTokenState(token);
-
-      // 3) get profile
-      const user = await getMe();
-      sessionStorage.setItem("user", JSON.stringify(user));
-      sessionStorage.setItem('userId', user._id || user.id);
-      setUserName(user.name || "");
-
-      showSuccessAndClose("Login successful!");
-    } catch (err) {
-      showError(err.response?.data?.message || "Login failed. Try again.");
-    }
+  const handleSaveClick = () => {
+    setConfirmOpen(true);
   };
+
+  const handleConfirmClose = () => {
+    setConfirmOpen(false);
+  };
+
+  // LOGIN
+const handleLoginSubmit = async (e) => {
+  e.preventDefault();
+  const form = new FormData(e.currentTarget);
+
+  try {
+    // 1) Log in
+    const { token } = await login({
+      email: form.get("email"),
+      password: form.get("password"),
+    });
+
+    // 2) persist token
+    sessionStorage.setItem("token", token);
+    setAuthToken(token);
+    setAuthTokenState(token);
+
+    // 3) fetch & persist user profile
+    const me = await getMe();
+    sessionStorage.setItem("user", JSON.stringify(me));
+    sessionStorage.setItem("userId", me._id || me.id);
+
+    setUserName(me.name || "");
+    showSuccessAndClose("Login successful!");
+  } catch (err) {
+    showError(err.response?.data?.message || "Login failed. Try again.");
+  }
+};
+
+ 
+
+
 
   // REGISTER
   const handleRegisterSubmit = async (e) => {
@@ -252,10 +268,10 @@ useEffect(() => {
         password: form.get("password"),
       });
       showSuccessAndClose(
-      "Registration successful! Please log in.",
-      () => switchToLogin(),
-      { shouldCloseDialog: false }
-    );
+        "Registration successful! Please log in.",
+        () => switchToLogin(),
+        { shouldCloseDialog: false }
+      );
     } catch (err) {
       console.error("Registration failed:", err);
     }
@@ -299,65 +315,65 @@ useEffect(() => {
   // Update a top‐level field
   const handleEditChange = (e) => {
     const { name, value } = e.target;
-    setEditData((prev) => ({ ...prev, [name]: value }));  
+    setEditData((prev) => ({ ...prev, [name]: value }));
   };
 
   //image save
   async function handleEditImageChange(e) {
-  const file = e.target.files?.[0];
-  if (!file) return;
+    const file = e.target.files?.[0];
+    if (!file) return;
 
-  // reset any prior errors
-  setUploadError("");
+    // reset any prior errors
+    setUploadError("");
 
-  // 1) Validate file type
-  if (!file.type.startsWith("image/")) {
-    setUploadError("Please select a valid image file.");
-    return;
-  }
-
-  // 2) Validate file size (max 2 MB here, adjust as needed)
-  const MAX = 2 * 1024 * 1024;
-  if (file.size > MAX) {
-    setUploadError("Image must be smaller than 2 MB.");
-    return;
-  }
-
-  // 3) Show client‐side preview immediately
-  const previewUrl = URL.createObjectURL(file);
-  setEditData((d) => ({ ...d, image: previewUrl }));
-  setIsUploading(true);
-
-  // 4) Convert to Base64 data-URI
-  const reader = new FileReader();
-  reader.readAsDataURL(file);
-  reader.onload = async () => {
-    const dataUrl = reader.result; // "data:image/png;base64,AAA…"
-
-    try {
-      // 5) POST JSON { image: dataUrl } to /api/recipe/:id/avatar
-      const { avatar } = await uploadAvatar(editData.id, dataUrl);
-
-      // 6) Server echoes back the data-URI—persist it in state
-      setEditData((d) => ({ ...d, image: avatar }));
-    } catch (err) {
-      console.error("Image upload failed:", err);
-      setUploadError(
-        err?.response?.data?.message ||
-        err?.message ||
-        "Image upload failed. Please try again."
-      );
-    } finally {
-      setIsUploading(false);
-      URL.revokeObjectURL(previewUrl);
+    // 1) Validate file type
+    if (!file.type.startsWith("image/")) {
+      setUploadError("Please select a valid image file.");
+      return;
     }
-  };
 
-  reader.onerror = () => {
-    setIsUploading(false);
-    setUploadError("Failed to read the file. Please try a different image.");
-  };
-}
+    // 2) Validate file size (max 2 MB here, adjust as needed)
+    const MAX = 2 * 1024 * 1024;
+    if (file.size > MAX) {
+      setUploadError("Image must be smaller than 2 MB.");
+      return;
+    }
+
+    // 3) Show client‐side preview immediately
+    const previewUrl = URL.createObjectURL(file);
+    setEditData((d) => ({ ...d, image: previewUrl }));
+    setIsUploading(true);
+
+    // 4) Convert to Base64 data-URI
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = async () => {
+      const dataUrl = reader.result; // "data:image/png;base64,AAA…"
+
+      try {
+        // 5) POST JSON { image: dataUrl } to /api/recipe/:id/avatar
+        const { avatar } = await uploadAvatar(editData.id, dataUrl);
+
+        // 6) Server echoes back the data-URI—persist it in state
+        setEditData((d) => ({ ...d, image: avatar }));
+      } catch (err) {
+        console.error("Image upload failed:", err);
+        setUploadError(
+          err?.response?.data?.message ||
+          err?.message ||
+          "Image upload failed. Please try again."
+        );
+      } finally {
+        setIsUploading(false);
+        URL.revokeObjectURL(previewUrl);
+      }
+    };
+
+    reader.onerror = () => {
+      setIsUploading(false);
+      setUploadError("Failed to read the file. Please try a different image.");
+    };
+  }
 
 
   // Ingredient helpers
@@ -399,32 +415,47 @@ useEffect(() => {
   };
 
   // Save back to the server
-  const handleEditSave = async () => {
+const handleEditSave = async () => {
+  try {
+    // 1) Push updates to the server
+    await updateRecipe(editData.id, {
+      image:        editData.image,
+      title:        editData.title,
+      cookingTime:  editData.cookingTime,
+      ingredients:  editData.ingredients,
+      instructions: editData.instructions,
+    });
+
+    // 2) Re-fetch the full list (with current searchTerm)
+    const { recipes: freshList } = await getRecipes({
+      title:      searchTerm,
+      ingredient: searchTerm,
+    });
+
+    // 3) Overwrite your master array & reset page if needed
+    setAllRecipes(freshList);
+    setPage(0);
+
+    // 4) Close the modal
+    handleEditClose();
+  } catch (err) {
+    setEditError(err.response?.data?.message || "Save failed");
+  }
+};
+  // Wrapper that shows toasts
+  const handleConfirmSave = async () => {
+    setConfirmOpen(false);
     try {
-      await updateRecipe(editData.id, {
-        image: editData.image,
-        title: editData.title,
-        cookingTime: editData.cookingTime,
-        ingredients: editData.ingredients,
-        instructions: editData.instructions,
-      });
-      console.log("Saving recipe:", editData);
-      // Refresh list or refetch
-      await getRecipes({
-        page: page + 1,
-        limit: rowsPerPage,
-        title: searchTerm,
-        ingredient: searchTerm
-      })
-        .then(({ recipes: data, pagination }) => {
-          setRecipes(data);
-          setTotalPages(pagination.total);
-        })
-      handleEditClose();
+      await handleEditSave();
+      enqueueSnackbar('Recipe saved successfully', { variant: 'success' });
     } catch (err) {
-      setEditError(err.response?.data?.message || "Save failed");
+      enqueueSnackbar(
+        err.response?.data?.message || 'Failed to save recipe',
+        { variant: 'error' }
+      );
     }
   };
+
 
   return (
     <>
@@ -436,10 +467,10 @@ useEffect(() => {
             <Grid item xs={3}>
               {/* Logo */}
               <Box
-                // display="flex"
-                // justifyContent="center"
-                // alignItems="center"
-                // mb={3}            // space below the logo
+              // display="flex"
+              // justifyContent="center"
+              // alignItems="center"
+              // mb={3}            // space below the logo
               >
                 <Box
                   component="img"
@@ -451,23 +482,23 @@ useEffect(() => {
             </Grid>
             {/* Search Form */}
             <Grid item xs={5}>
-                <MKInput
-                  fullWidth
-                  placeholder="Search by title/ingredient..."
-                  size="small"
-                  value={searchTerm}
-                  onChange={e => setSearchTerm(e.target.value)}
-                  icon={{ component: Icon, props: { children: "search" } }}
-                />
+              <MKInput
+                fullWidth
+                placeholder="Search by title/ingredient..."
+                size="small"
+                value={searchTerm}
+                onChange={e => setSearchTerm(e.target.value)}
+                icon={{ component: Icon, props: { children: "search" } }}
+              />
             </Grid>
             <Grid item xs={4} textAlign="right">
               <MKTypography
-                    variant="button"
-                    color="text"
-                    sx={{ mr: 2, verticalAlign: "middle" }}
-                  >
-                    Welcome, {userName}
-                  </MKTypography>
+                variant="button"
+                color="text"
+                sx={{ mr: 2, verticalAlign: "middle" }}
+              >
+                Welcome, {userName}
+              </MKTypography>
               {/* Menu */}
               <MKButton
                 id="customized-button"
@@ -532,118 +563,105 @@ useEffect(() => {
       </MKBox>
 
       {/* Recipe Cards */}
-      <MKBox component="main" py={6}>
-        <Container maxWidth="lg">
-          <MKTypography variant="h3" mb={4} textAlign="center">
-            Recipe Collection
-          </MKTypography>
+<MKBox component="main" py={6}>
+  <Container maxWidth="lg">
+    <MKTypography variant="h3" mb={4} textAlign="center">
+      Recipe Collection
+    </MKTypography>
 
-          <Grid container spacing={4} direction="column">
-            {recipes.map((r) => (
-              <Grid item key={r.id} xs={12}>
-                <Card sx={{ display: "flex", flexDirection: "column" }}>
-                  <Grid container>
-                    <Grid item xs={3}>
-                      <CardMedia
-                        component="img"
-                        image={r.image}
-                        alt={r.title}
-                        sx={{
-                          width: 200,
-                          height: 200,
-                          objectFit: "cover",
-                        }}
-                      />
-                    </Grid>
-                    <Grid item xs={9}>
-                      <CardContent>
-                        <MKTypography variant="h6" gutterBottom>
-                          {r.title}
-                        </MKTypography>
-                        <MKTypography
-                          variant="body2"
-                          color="text"
-                          mb={1}
-                        >
-                          by {r.author}
-                        </MKTypography>
-                        <MKTypography
-                          variant="body2"
-                          color="warning"
-                        >
-                          {r.rating}{" "}
-                          <Icon
-                            fontSize="small"
-                            sx={{ verticalAlign: "middle" }}
-                          >
-                            star
-                          </Icon>
-                        </MKTypography>
-                      </CardContent>
-
-                      <CardActions
-                        sx={{
-                          display: "flex",
-                          justifyContent: "space-between",
-                          p: 2,
-                        }}
-                      >
-                        {/* Always show View */}
-                        <MKButton
-                          fullWidth
-                          color="info"
-                          variant="contained"
-                          onClick={() => navigate(`/recipe/${r.id}`)}
-                        >
-                          View
-                        </MKButton>
-
-                        {/* Only your own recipes get an active Edit button */}
-                        {authTokenState && r.editable ? (
-                          <MKButton
-                            fullWidth
-                            variant="contained"
-                            color="info"
-                            onClick={() =>
-                              handleEditOpen(r)}
-                          >
-                            Edit
-                          </MKButton>
-                        ) : (
-                          <MKButton
-                            fullWidth
-                            variant="outlined"
-                            color="info"
-                            disabled
-                          >
-                            Edit
-                          </MKButton>
-                        )}
-                      </CardActions>
-                    </Grid>
-                  </Grid>
-                </Card>
+    <Grid container spacing={4} direction="column">
+      {paginatedRecipes.map((r) => (
+        <Grid item key={r.id} xs={12}>
+          <Card sx={{ display: "flex", flexDirection: "column" }}>
+            <Grid container>
+              <Grid item xs={3}>
+                <CardMedia
+                  component="img"
+                  image={r.image}
+                  alt={r.title}
+                  sx={{ width: 200, height: 200, objectFit: "cover" }}
+                />
               </Grid>
-            ))}
-          </Grid>
+              <Grid item xs={9}>
+                <CardContent>
+                  <MKTypography variant="h6" gutterBottom>
+                    {r.title}
+                  </MKTypography>
+                  <MKTypography variant="body2" color="text" mb={1}>
+                    by {r.author}
+                  </MKTypography>
+                  <MKTypography variant="body2" color="warning">
+                    {r.rating}{" "}
+                    <Icon fontSize="small" sx={{ verticalAlign: "middle" }}>
+                      star
+                    </Icon>
+                  </MKTypography>
+                </CardContent>
 
-      {/* Pagination */}
-      <MKBox mt={6} display="flex" justifyContent="center">
-        <TablePagination
-          component="div"
-          count={totalPages}
-          page={page}
-          onPageChange={handleChangePage}
-          rowsPerPage={rowsPerPage}
-          onRowsPerPageChange={handleChangeRowsPerPage}
-          rowsPerPageOptions={[2, 3, 4]}
-          labelRowsPerPage="Recipes per page:"
-          showFirstButton
-          showLastButton
-        />
-      </MKBox>
-        </Container>
-      </MKBox>
+                <CardActions
+                  sx={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    p: 2,
+                  }}
+                >
+                  <MKButton
+                    fullWidth
+                    color="info"
+                    variant="contained"
+                    onClick={() => navigate(`/recipe/${r.id}`)}
+                  >
+                    View
+                  </MKButton>
+
+                  {authTokenState && r.editable ? (
+                    <MKButton
+                      fullWidth
+                      variant="contained"
+                      color="info"
+                      onClick={() => handleEditOpen(r)}
+                    >
+                      Edit
+                    </MKButton>
+                  ) : (
+                    <MKButton
+                      fullWidth
+                      variant="outlined"
+                      color="info"
+                      disabled
+                    >
+                      Edit
+                    </MKButton>
+                  )}
+                </CardActions>
+              </Grid>
+            </Grid>
+          </Card>
+        </Grid>
+      ))}
+    </Grid>
+
+    {/* Pagination */}
+    <MKBox mt={6} display="flex" justifyContent="center">
+      <TablePagination
+        component="div"
+        count={filteredRecipes.length}
+        page={page}
+        rowsPerPage={rowsPerPage}
+        onPageChange={(_, newPage) => setPage(newPage)}
+        onRowsPerPageChange={(e) => {
+          setRowsPerPage(parseInt(e.target.value, 10));
+          setPage(0);
+        }}
+        rowsPerPageOptions={[2, 3, 4]}
+        labelRowsPerPage="Recipes per page:"
+        showFirstButton
+        showLastButton
+      />
+    </MKBox>
+  </Container>
+</MKBox>
+
 
       {/* Login / Register Dialog */}
       <BootstrapDialog
@@ -927,7 +945,7 @@ useEffect(() => {
                   size="small"
                   onClick={() => handleRemoveInstruction(idx)}
                 >
-                  ×
+                  x``
                 </MKButton>
               </Grid>
             </Grid>
@@ -939,7 +957,7 @@ useEffect(() => {
 
         {/* Save / Cancel Buttons */}
         <DialogActions sx={{ p: 2 }}>
-          <MKButton fullWidth onClick={handleEditSave}>
+          <MKButton fullWidth onClick={handleSaveClick}>
             Save
           </MKButton>
           <MKButton fullWidth color="secondary" onClick={handleEditClose}>
@@ -947,6 +965,25 @@ useEffect(() => {
           </MKButton>
         </DialogActions>
       </BootstrapDialog>
+            {/*-----------------Confirm Save Dialog--------------------------*/}
+      <Dialog
+        open={confirmOpen}
+        onClose={handleConfirmClose}
+        aria-labelledby="confirm-dialog-title"
+      >
+        <DialogTitle id="confirm-dialog-title">Confirm</DialogTitle>
+        <DialogContent dividers>
+          <Typography>
+            Are you sure you want to save changes to this recipe?
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleConfirmClose}>Cancel</Button>
+          <Button color="primary" onClick={handleConfirmSave}>
+            Save
+          </Button>
+        </DialogActions>
+      </Dialog>
     </>
   );
 }

@@ -8,6 +8,7 @@ import MKBox from "components/MKBox";
 import MKTypography from "components/MKTypography";
 import MKButton from "components/MKButton";
 import MKInput from "components/MKInput";
+import { useSnackbar } from 'notistack';
 import { getRecipeById, updateRecipe, deleteRecipe, likeRecipe, commentRecipe, uploadAvatar} from "services/api";
 
 //RecipeCard
@@ -80,6 +81,8 @@ export default function RecipePage() {
     const [uploadError, setUploadError] = useState("");
     const [isSaving, setIsSaving] = useState(false);
     const [saveError, setSaveError] = useState("");
+    const { enqueueSnackbar } = useSnackbar();
+    
 
     // Load auth data
     useEffect(() => {
@@ -145,9 +148,15 @@ useEffect(() => {
         author: fullRecipe.authorId.name
       });
       setEditMode(false);
+      enqueueSnackbar("Recipe editted successfully", {
+        variant: "success",
+      });
     } catch (err) {
       console.error(err);
-      setSaveError("Failed to save recipe. Please try again.");
+      enqueueSnackbar(
+        err.response?.data?.message || "Failed to add comment",
+        { variant: "error" }
+      );
     } finally {
       setIsSaving(false);
     }
@@ -235,22 +244,36 @@ async function handleImageChange(e) {
 
   async function submitComment() {
     if (!newComment.trim()) return;
-    try {
-      const res = await commentRecipe(id, newComment);
-      const created = res.data.data;
 
-      // merge into state, keeping newest first
-      setRecipe(r => ({
-        ...r,
-        comments: [created, ...(r.comments || [])]
+    try {
+      // 1) call API & get back the new comment
+      const createdComment = await commentRecipe(id, newComment);
+
+      // 2) merge into state, newest first
+      setRecipe(prev => ({
+        ...prev,
+        comments: [createdComment, ...(prev.comments || [])]
       }));
 
+      // 3) close the dialog
       closeComment();
+
+      // 4) show success toast
+      enqueueSnackbar("Comment added successfully", {
+        variant: "success",
+      });
+
     } catch (err) {
       console.error("Submit error:", err);
-      // showError(getErrorMessage(err.response?.status));
+
+      // 5) show error toast
+      enqueueSnackbar(
+        err.response?.data?.message || "Failed to add comment",
+        { variant: "error" }
+      );
     }
   }
+
 
     return (
     <MKBox component="main" py={6}>
