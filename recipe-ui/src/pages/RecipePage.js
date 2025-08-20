@@ -278,24 +278,37 @@ async function handleImageChange(e) {
     return (
     <MKBox component="main" py={6}>
       <Container maxWidth="md">
-        {/* Breadcrumbs */}
-        <Breadcrumbs aria-label="breadcrumb" sx={{ mb: 2 }}>
-          <Link
-            underline="hover"
-            color="inherit"
-            onClick={(e) => {
-              e.preventDefault();
-              navigate("/");
-            }}
-            sx={{ cursor: "pointer" }}
-          >
-            Home
-          </Link>
-
-          <Typography color="text.primary">
-            Recipe
-          </Typography>
-        </Breadcrumbs>
+        <Grid container>
+          <Grid item xs={6}>
+            {/* Breadcrumbs */}
+            <Breadcrumbs aria-label="breadcrumb" sx={{ mb: 2 }}>
+              <Link
+                underline="hover"
+                color="inherit"
+                onClick={(e) => {
+                  e.preventDefault();
+                  navigate("/");
+                }}
+                sx={{ cursor: "pointer" }}
+              >
+                Home
+              </Link>
+              <Typography color="text.primary">
+                Recipe
+              </Typography>
+            </Breadcrumbs>
+          </Grid>
+          <Grid item xs={4}></Grid>
+          <Grid item xs={2}>
+            <MKButton
+              fullWidth
+              color="warning"
+              onClick={() => navigate('/')}
+            >
+              Back to Home
+            </MKButton>
+          </Grid>
+        </Grid>
         <RecipeCard elevation={3}>
           {/* Row 1: Image (md4) & Title (md8) */}
           <Grid container alignItems="center" justifyContent="center" spacing={2} p={2}>
@@ -331,6 +344,7 @@ async function handleImageChange(e) {
                     {/* Upload button with spinner */}
                     <label htmlFor="recipe-image-upload">
                       <MKButton
+                        color="info"
                         component="span"
                         disabled={isUploading}
                         sx={{ position: "relative" }}
@@ -566,7 +580,7 @@ async function handleImageChange(e) {
           sx={{ mb: 2 }}
         >
           {/* Step text */}
-          <Grid item xs>
+          <Grid item xs={11}>
             <TextField
               fullWidth
               multiline
@@ -582,7 +596,7 @@ async function handleImageChange(e) {
           </Grid>
 
           {/* Remove */}
-          <Grid item>
+          <Grid item xs={1}>
             <MKButton
               color="error"
               size="small"
@@ -631,6 +645,8 @@ async function handleImageChange(e) {
           startIcon={<Icon>thumb_up</Icon>}
           disabled={!isAuthed}
           onClick={handleLike}
+          color="info"
+          variant="outlined"
         >
           Like ({recipe.likeCount})
         </MKButton>
@@ -641,6 +657,8 @@ async function handleImageChange(e) {
           startIcon={<Icon>comment</Icon>}
           disabled={!isAuthed}
           onClick={openComment}
+          color="info"
+          variant="outlined"
         >
           Comment ({recipe.comments.length})
         </MKButton>
@@ -654,8 +672,8 @@ async function handleImageChange(e) {
       <Grid item>
         <MKButton
           size="small"
-          color="dark"
-          variant="outlined"
+          color="primary"
+          variant="contained"
           onClick={() => setEditMode(true)}
         >
           Edit
@@ -681,6 +699,7 @@ async function handleImageChange(e) {
                     <MKButton
                       onClick={handleSave}
                       disabled={isSaving}
+                      color="success"
                     >
                       {isSaving ? <CircularProgress size={20} /> : "Save"}
                     </MKButton>
@@ -692,7 +711,7 @@ async function handleImageChange(e) {
                     )}
                   </Grid>
                   <Grid item>
-                    <MKButton color="secondary" onClick={() => setEditMode(false)}>
+                    <MKButton variant="outlined" color="secondary" onClick={() => setEditMode(false)}>
                       Cancel
                     </MKButton>
                   </Grid>

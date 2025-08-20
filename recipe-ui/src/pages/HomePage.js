@@ -4,7 +4,7 @@ import React, { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { styled, alpha } from "@mui/material/styles";
 import {
-  Container, Grid, Card, CardMedia, TextField, CardContent, CardActions, Icon, Dialog, DialogTitle,DialogActions,
+  Container, Grid, Card, CardMedia, TextField, CardContent, CardActions, Icon, Dialog, DialogTitle, DialogActions,
   DialogContent, Button, Box, Alert, Menu, MenuItem, Divider, Typography, CircularProgress, TablePagination
 } from "@mui/material";
 import { useSnackbar } from 'notistack';
@@ -16,6 +16,7 @@ import EditIcon from "@mui/icons-material/Edit";
 import FileCopyIcon from "@mui/icons-material/FileCopy";
 import ArchiveIcon from "@mui/icons-material/Archive";
 import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
+import ConfirmDialog from "ui/dialogs/ConfirmDialog";
 
 
 import { getMe, getRecipes, login, register, setAuthToken, updateRecipe, uploadAvatar } from "services/api";
@@ -115,33 +116,33 @@ export default function HomePage() {
 
   //initial load
   useEffect(() => {
-  const token = sessionStorage.getItem("token");
-  const user  = JSON.parse(sessionStorage.getItem("user") || "{}");
+    const token = sessionStorage.getItem("token");
+    const user = JSON.parse(sessionStorage.getItem("user") || "{}");
 
-  if (!token) return;
+    if (!token) return;
 
-  // 1) apply token to axios
-  setAuthToken(token);
+    // 1) apply token to axios
+    setAuthToken(token);
 
-  // 2) flip “logged in” flag
-  setAuthTokenState(token);
+    // 2) flip “logged in” flag
+    setAuthTokenState(token);
 
-  // load name from storage
-  if (user.name) {
-    setUserName(user.name);
-  } else {
-    //fetch fresh
-    getMe()
-      .then(me => {
-        sessionStorage.setItem("user", JSON.stringify(me));
-        setUserName(me.name);
-      })
-      .catch(() => {
-        setAuthToken(null);
-        setAuthTokenState("");
-        sessionStorage.removeItem("token");
-        sessionStorage.removeItem("user");
-      });
+    // load name from storage
+    if (user.name) {
+      setUserName(user.name);
+    } else {
+      //fetch fresh
+      getMe()
+        .then(me => {
+          sessionStorage.setItem("user", JSON.stringify(me));
+          setUserName(me.name);
+        })
+        .catch(() => {
+          setAuthToken(null);
+          setAuthTokenState("");
+          sessionStorage.removeItem("token");
+          sessionStorage.removeItem("user");
+        });
     }
   }, []);
 
@@ -156,7 +157,7 @@ export default function HomePage() {
         .catch(err => console.error("Fetch error:", err));
     }, 500);
     return () => clearTimeout(handler);
-  }, [searchTerm, authTokenState]);
+  }, [searchTerm]);
 
   // filter by searchTerm tokens
   const filteredRecipes = useMemo(() => {
@@ -220,40 +221,40 @@ export default function HomePage() {
     setConfirmOpen(true);
   };
 
-  const handleConfirmClose = () => {
-    setConfirmOpen(false);
-  };
+  // const handleConfirmClose = () => {
+  //   setConfirmOpen(false);
+  // };
 
   // LOGIN
-const handleLoginSubmit = async (e) => {
-  e.preventDefault();
-  const form = new FormData(e.currentTarget);
+  const handleLoginSubmit = async (e) => {
+    e.preventDefault();
+    const form = new FormData(e.currentTarget);
 
-  try {
-    // 1) Log in
-    const { token } = await login({
-      email: form.get("email"),
-      password: form.get("password"),
-    });
+    try {
+      // 1) Log in
+      const { token } = await login({
+        email: form.get("email"),
+        password: form.get("password"),
+      });
 
-    // 2) persist token
-    sessionStorage.setItem("token", token);
-    setAuthToken(token);
-    setAuthTokenState(token);
+      // 2) persist token
+      sessionStorage.setItem("token", token);
+      setAuthToken(token);
+      setAuthTokenState(token);
 
-    // 3) fetch & persist user profile
-    const me = await getMe();
-    sessionStorage.setItem("user", JSON.stringify(me));
-    sessionStorage.setItem("userId", me._id || me.id);
+      // 3) fetch & persist user profile
+      const me = await getMe();
+      sessionStorage.setItem("user", JSON.stringify(me));
+      sessionStorage.setItem("userId", me._id || me.id);
 
-    setUserName(me.name || "");
-    showSuccessAndClose("Login successful!");
-  } catch (err) {
-    showError(err.response?.data?.message || "Login failed. Try again.");
-  }
-};
+      setUserName(me.name || "");
+      showSuccessAndClose("Login successful!");
+    } catch (err) {
+      showError(err.response?.data?.message || "Login failed. Try again.");
+    }
+  };
 
- 
+
 
 
 
@@ -415,33 +416,36 @@ const handleLoginSubmit = async (e) => {
   };
 
   // Save back to the server
-const handleEditSave = async () => {
-  try {
-    // 1) Push updates to the server
-    await updateRecipe(editData.id, {
-      image:        editData.image,
-      title:        editData.title,
-      cookingTime:  editData.cookingTime,
-      ingredients:  editData.ingredients,
-      instructions: editData.instructions,
-    });
+  const handleEditSave = async () => {
+    setIsUploading(true);
+    setEditError("");
+    try {
+      // 1) Push updates to the server
+      await updateRecipe(editData.id, {
+        title: editData.title,
+        description: editData.description,
+        cookingTime: editData.cookingTime,
+        ingredients: editData.ingredients,
+        instructions: editData.instructions,
+        image: editData.image,
+      });
 
-    // 2) Re-fetch the full list (with current searchTerm)
-    const { recipes: freshList } = await getRecipes({
-      title:      searchTerm,
-      ingredient: searchTerm,
-    });
+      // 2) Re-fetch the full list (with current searchTerm)
+      const { recipes: freshList } = await getRecipes({
+        title: searchTerm,
+        ingredient: searchTerm,
+      });
 
-    // 3) Overwrite your master array & reset page if needed
-    setAllRecipes(freshList);
-    setPage(0);
+      // 3) Overwrite your master array & reset page if needed
+      setAllRecipes(freshList);
+      setPage(0);
 
-    // 4) Close the modal
-    handleEditClose();
-  } catch (err) {
-    setEditError(err.response?.data?.message || "Save failed");
-  }
-};
+      // 4) Close the modal
+      handleEditClose();
+    } catch (err) {
+      setEditError(err.response?.data?.message || "Save failed");
+    }
+  };
   // Wrapper that shows toasts
   const handleConfirmSave = async () => {
     setConfirmOpen(false);
@@ -492,13 +496,15 @@ const handleEditSave = async () => {
               />
             </Grid>
             <Grid item xs={4} textAlign="right">
-              <MKTypography
-                variant="button"
-                color="text"
-                sx={{ mr: 2, verticalAlign: "middle" }}
-              >
-                Welcome, {userName}
-              </MKTypography>
+              {userName && (
+                <MKTypography
+                  variant="button"
+                  color="text"
+                  sx={{ mr: 2, verticalAlign: "middle" }}
+                >
+                  Welcome, {userName}
+                </MKTypography>
+              )}
               {/* Menu */}
               <MKButton
                 id="customized-button"
@@ -536,7 +542,7 @@ const handleEditSave = async () => {
                 <MenuItem
                   onClick={() => {
                     handleMenuClose();
-                    navigate("/recipe/add");   // adjust path as needed
+                    navigate("/recipe/add");
                   }}
                   disableRipple
                   disabled={!authTokenState}
@@ -563,104 +569,104 @@ const handleEditSave = async () => {
       </MKBox>
 
       {/* Recipe Cards */}
-<MKBox component="main" py={6}>
-  <Container maxWidth="lg">
-    <MKTypography variant="h3" mb={4} textAlign="center">
-      Recipe Collection
-    </MKTypography>
+      <MKBox component="main" py={6}>
+        <Container maxWidth="lg">
+          <MKTypography variant="h3" mb={4} textAlign="center">
+            Recipe Collection
+          </MKTypography>
 
-    <Grid container spacing={4} direction="column">
-      {paginatedRecipes.map((r) => (
-        <Grid item key={r.id} xs={12}>
-          <Card sx={{ display: "flex", flexDirection: "column" }}>
-            <Grid container>
-              <Grid item xs={3}>
-                <CardMedia
-                  component="img"
-                  image={r.image}
-                  alt={r.title}
-                  sx={{ width: 200, height: 200, objectFit: "cover" }}
-                />
+          <Grid container spacing={4} direction="column">
+            {paginatedRecipes.map((r) => (
+              <Grid item key={r.id} xs={12}>
+                <Card sx={{ display: "flex", flexDirection: "column" }}>
+                  <Grid container>
+                    <Grid item xs={3}>
+                      <CardMedia
+                        component="img"
+                        image={r.image}
+                        alt={r.title}
+                        sx={{ width: 200, height: 200, objectFit: "cover" }}
+                      />
+                    </Grid>
+                    <Grid item xs={9}>
+                      <CardContent>
+                        <MKTypography variant="h6" gutterBottom>
+                          {r.title}
+                        </MKTypography>
+                        <MKTypography variant="body2" color="text" mb={1}>
+                          by {r.author}
+                        </MKTypography>
+                        <MKTypography variant="body2" color="warning">
+                          {r.rating}{" "}
+                          <Icon fontSize="small" sx={{ verticalAlign: "middle" }}>
+                            star
+                          </Icon>
+                        </MKTypography>
+                      </CardContent>
+
+                      <CardActions
+                        sx={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          p: 2,
+                        }}
+                      >
+                        <MKButton
+                          fullWidth
+                          color="info"
+                          variant="contained"
+                          onClick={() => navigate(`/recipe/${r.id}`)}
+                        >
+                          View
+                        </MKButton>
+
+                        {authTokenState && r.editable ? (
+                          <MKButton
+                            fullWidth
+                            variant="contained"
+                            color="primary"
+                            onClick={() => handleEditOpen(r)}
+                          >
+                            Edit
+                          </MKButton>
+                        ) : (
+                          <MKButton
+                            fullWidth
+                            variant="outlined"
+                            color="secondary"
+                            disabled
+                          >
+                            Edit
+                          </MKButton>
+                        )}
+                      </CardActions>
+                    </Grid>
+                  </Grid>
+                </Card>
               </Grid>
-              <Grid item xs={9}>
-                <CardContent>
-                  <MKTypography variant="h6" gutterBottom>
-                    {r.title}
-                  </MKTypography>
-                  <MKTypography variant="body2" color="text" mb={1}>
-                    by {r.author}
-                  </MKTypography>
-                  <MKTypography variant="body2" color="warning">
-                    {r.rating}{" "}
-                    <Icon fontSize="small" sx={{ verticalAlign: "middle" }}>
-                      star
-                    </Icon>
-                  </MKTypography>
-                </CardContent>
+            ))}
+          </Grid>
 
-                <CardActions
-                  sx={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    p: 2,
-                  }}
-                >
-                  <MKButton
-                    fullWidth
-                    color="info"
-                    variant="contained"
-                    onClick={() => navigate(`/recipe/${r.id}`)}
-                  >
-                    View
-                  </MKButton>
-
-                  {authTokenState && r.editable ? (
-                    <MKButton
-                      fullWidth
-                      variant="contained"
-                      color="info"
-                      onClick={() => handleEditOpen(r)}
-                    >
-                      Edit
-                    </MKButton>
-                  ) : (
-                    <MKButton
-                      fullWidth
-                      variant="outlined"
-                      color="info"
-                      disabled
-                    >
-                      Edit
-                    </MKButton>
-                  )}
-                </CardActions>
-              </Grid>
-            </Grid>
-          </Card>
-        </Grid>
-      ))}
-    </Grid>
-
-    {/* Pagination */}
-    <MKBox mt={6} display="flex" justifyContent="center">
-      <TablePagination
-        component="div"
-        count={filteredRecipes.length}
-        page={page}
-        rowsPerPage={rowsPerPage}
-        onPageChange={(_, newPage) => setPage(newPage)}
-        onRowsPerPageChange={(e) => {
-          setRowsPerPage(parseInt(e.target.value, 10));
-          setPage(0);
-        }}
-        rowsPerPageOptions={[2, 3, 4]}
-        labelRowsPerPage="Recipes per page:"
-        showFirstButton
-        showLastButton
-      />
-    </MKBox>
-  </Container>
-</MKBox>
+          {/* Pagination */}
+          <MKBox mt={6} display="flex" justifyContent="center">
+            <TablePagination
+              component="div"
+              count={filteredRecipes.length}
+              page={page}
+              rowsPerPage={rowsPerPage}
+              onPageChange={(_, newPage) => setPage(newPage)}
+              onRowsPerPageChange={(e) => {
+                setRowsPerPage(parseInt(e.target.value, 10));
+                setPage(0);
+              }}
+              rowsPerPageOptions={[2, 3, 4]}
+              labelRowsPerPage="Recipes per page:"
+              showFirstButton
+              showLastButton
+            />
+          </MKBox>
+        </Container>
+      </MKBox>
 
 
       {/* Login / Register Dialog */}
@@ -735,7 +741,7 @@ const handleEditSave = async () => {
                 fullWidth
                 required
               />
-              <MKButton type="submit" fullWidth>
+              <MKButton type="submit" fullWidth color="primary">
                 Login
               </MKButton>
             </Box>
@@ -773,15 +779,14 @@ const handleEditSave = async () => {
                 fullWidth
                 required
               />
-              <MKButton type="submit" fullWidth>
+              <MKButton type="submit" fullWidth color="secondary">
                 Register
               </MKButton>
             </Box>
           )}
         </DialogContent>
-
         <DialogActions>
-          <Button onClick={handleClose} color="secondary">
+          <Button color="inherit" onClick={handleClose}>
             Cancel
           </Button>
         </DialogActions>
@@ -833,6 +838,7 @@ const handleEditSave = async () => {
             {/* Upload button */}
             <label htmlFor="edit-recipe-image-upload">
               <MKButton
+                color="info"
                 component="span"
                 disabled={isUploading}
                 sx={{ position: "relative" }}
@@ -862,6 +868,16 @@ const handleEditSave = async () => {
             name="title"
             label="Title"
             value={editData?.title || ""}
+            onChange={handleEditChange}
+            fullWidth
+            sx={{ mb: 2 }}
+          />
+
+          {/* Description */}
+          <MKInput
+            name="description"
+            label="Description"
+            value={editData?.description || ""}
             onChange={handleEditChange}
             fullWidth
             sx={{ mb: 2 }}
@@ -900,7 +916,7 @@ const handleEditSave = async () => {
                   fullWidth
                 />
               </Grid>
-              <Grid item xs={3}>
+              <Grid item xs={2}>
                 <MKInput
                   placeholder="Unit"
                   value={ing.unit}
@@ -914,7 +930,7 @@ const handleEditSave = async () => {
                   size="small"
                   onClick={() => handleRemoveIngredient(idx)}
                 >
-                  ×
+                  x
                 </MKButton>
               </Grid>
             </Grid>
@@ -929,7 +945,7 @@ const handleEditSave = async () => {
           </MKTypography>
           {editData?.instructions.map((step, idx) => (
             <Grid container spacing={1} alignItems="center" key={idx} sx={{ mb: 1 }}>
-              <Grid item xs>
+              <Grid item xs={10}>
                 <TextField
                   fullWidth
                   multiline
@@ -939,13 +955,13 @@ const handleEditSave = async () => {
                   onChange={(e) => handleInstructionChange(idx, e.target.value)}
                 />
               </Grid>
-              <Grid item>
+              <Grid item xs={1}>
                 <MKButton
                   color="error"
                   size="small"
                   onClick={() => handleRemoveInstruction(idx)}
                 >
-                  x``
+                  x
                 </MKButton>
               </Grid>
             </Grid>
@@ -957,33 +973,27 @@ const handleEditSave = async () => {
 
         {/* Save / Cancel Buttons */}
         <DialogActions sx={{ p: 2 }}>
-          <MKButton fullWidth onClick={handleSaveClick}>
+          <MKButton fullWidth color="success" onClick={handleSaveClick}>
             Save
           </MKButton>
-          <MKButton fullWidth color="secondary" onClick={handleEditClose}>
+          <MKButton fullWidth variant="outlined" color="secondary" onClick={handleEditClose}>
             Cancel
           </MKButton>
         </DialogActions>
       </BootstrapDialog>
-            {/*-----------------Confirm Save Dialog--------------------------*/}
-      <Dialog
+      {/* ─── Full-Screen Confirm Dialog ─── */}
+      <ConfirmDialog
         open={confirmOpen}
-        onClose={handleConfirmClose}
-        aria-labelledby="confirm-dialog-title"
-      >
-        <DialogTitle id="confirm-dialog-title">Confirm</DialogTitle>
-        <DialogContent dividers>
-          <Typography>
-            Are you sure you want to save changes to this recipe?
-          </Typography>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={handleConfirmClose}>Cancel</Button>
-          <Button color="primary" onClick={handleConfirmSave}>
-            Save
-          </Button>
-        </DialogActions>
-      </Dialog>
+        title="Confirm Edit"
+        contentText="Are you sure you want to save changes to this recipe?"
+        cancelText="Cancel"
+        confirmText="Save"
+        onClose={() => setConfirmOpen(false)}
+        onConfirm={() => {
+          setConfirmOpen(false);
+          handleConfirmSave();
+        }}
+      />
     </>
   );
 }

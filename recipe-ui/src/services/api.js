@@ -30,6 +30,27 @@ async function request(method, url, data = {}, config = {}) {
 
 // 4) Public endpoints
 
+/**
+ * Fetch the allowed units array from the server.
+ * Always resolves to Array<string>.
+ */
+export async function getUnits() {
+  const resp = await api.get("/recipe/units");
+  console.log("AXIOS resp:", resp);
+  console.log("resp.data:", resp.data);
+  return normalizeUnits(resp.data);
+}
+
+function normalizeUnits(body) {
+  if (Array.isArray(body)) return body;
+  if (Array.isArray(body.data)) return body.data;
+  if (Array.isArray(body.units)) return body.units;
+  // add more shapes as you discover them...
+  console.warn("Unexpected /units payload:", body);
+  return [];
+}
+
+
 // FETCH recipes (no pagination on server, client-side only)
 export async function getRecipes({ title, ingredient } = {}) {
   const params = { ...(title && { title }), ...(ingredient && { ingredient }) };

@@ -8,8 +8,9 @@ const auth     = require('../middleware/auth');
 const { createRecipe, getRecipes, getRecipeById, updateRecipe,
   deleteRecipe, rateRecipe, likeRecipe, createAvatar, getAvatar
 } = require('../controllers/recipeController');
-const optionalAuth  = require('../middleware/optionalAuth');
 const { addComment, getAllComments, updateComment, deleteComment } = require('../controllers/commentController');
+const optionalAuth  = require('../middleware/optionalAuth');
+const  {validUnits} = require('../models/Recipe');
 
 // // ─── Multer configuration for avatars ────────────────────────────────
 // const AVATAR_DIR = path.join(__dirname, '../../app/storage/avatar');
@@ -67,6 +68,12 @@ function validateCommentContent(req, res, next) {
 /*               RECIPE ROUTES                  */
 /* ──────────────────────────────────────────── */
 
+// GET /api/recipe/units
+// Returns the canonical list of allowed ingredient units
+router.get("/units", (req, res) => {
+  res.json(validUnits);
+});
+
 /**
  * GET /api/recipe
  * Public – list all recipes with optional filters & pagination
@@ -79,6 +86,8 @@ router.get('/', optionalAuth, getRecipes);
  * Public – fetch a single recipe
  */
 router.get('/:id', validateObjectId('id'), getRecipeById);
+// GET /api/units
+// router.get("/units", getValidUnits);
 /**
  * POST /api/recipe
  * Private – create a new recipe
