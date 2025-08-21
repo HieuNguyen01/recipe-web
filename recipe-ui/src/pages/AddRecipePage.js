@@ -185,7 +185,7 @@ const handleConfirmCreate = async () => {
           <Grid item xs={2}>
             <MKButton
               fullWidth
-              color="warning"
+              color="info"
               onClick={() => navigate('/')}
             >
               Back to Home
@@ -214,9 +214,11 @@ const handleConfirmCreate = async () => {
                 )}
                 <Button
                   variant="contained"
-                  color="info"
                   component="label"
                   disabled={isUploading}
+                  sx={{backgroundColor: "#1a73e8",
+                      color: "#fff"
+                    }}
                 >
                   {isUploading
                     ? <CircularProgress size={24} color="inherit" />
@@ -371,7 +373,7 @@ const handleConfirmCreate = async () => {
                         size="small"
                         onClick={removeInstruction(idx)}
                       >
-                        ×
+                        x
                       </MKButton>
                     </Grid>
                   </Grid>
@@ -384,23 +386,62 @@ const handleConfirmCreate = async () => {
           <CardActions sx={{ justifyContent: "center", pb: 3 }}>
             <MKButton
               disabled={isSaveDisabled || isUploading}
-              sx={{ mr: 1 }}
               color="success"
+              sx={{ mr: 1 }}
               onClick={() =>
                 openConfirm({
-                  title:       "Confirm Create",
+                  title: "Confirm Create",
                   contentText: "Are you sure you want to create this recipe?",
                   confirmText: "Create",
-                  cancelText:  "Cancel",
-                  onConfirm:   handleConfirmCreate
+                  cancelText: "Cancel",
+                  confirmButtonProps: {
+                    variant: "contained",
+                    sx: {
+                      backgroundColor: "#4caf50",
+                      color: "#fff",
+                      '&:hover': {
+                        opacity: 0.8,
+                        backgroundColor: '#4caf50',
+                        borderColor: '#4caf50',
+                        color: '#fff'
+                      }
+                    },
+                  },
+                  cancelButtonProps: {
+                    variant: "outlined",
+                    sx: {
+                      borderColor: '#7b809a',
+                      color: '#7b809a',
+                      '&:hover': {
+                        backgroundColor: '#7b809a',
+                        borderColor: '#7b809a',
+                        color: '#fff'
+                      }
+                    },
+                  },
+                  onConfirm: handleConfirmCreate,
                 })
               }
             >
-              {isUploading
-                ? <CircularProgress color="inherit" size={20}/>
-                : "Save"}
+              {isUploading ? (
+                <CircularProgress size={20} color="inherit" />
+              ) : (
+                "Save"
+              )}
             </MKButton>
-            <MKButton color="secondary" onClick={() => navigate("/")}>
+            <MKButton 
+              onClick={() => navigate("/")}
+              variant="outlined"
+              color="secondary"
+              sx={{
+                '&:hover': {
+                  opacity: 1,
+                  backgroundColor: '#7b809a',
+                  borderColor: '#7b809a',
+                  color: '#fff'
+                }
+              }}
+            >
               Cancel
             </MKButton>
           </CardActions>
