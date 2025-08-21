@@ -5,7 +5,8 @@ const path   = require('path');
 const Recipe = require('../models/Recipe');
 const Rating = require('../models/Rating');
 const Like   = require('../models/Like');
-const { success, error } = require('../utils/response');
+const ApiError  = require('../utils/ApiError');
+const catchAsync = require('../utils/catchAsync');
 
 // Inline helper to validate & clean up an array of step strings
 function normalizeSteps(steps) {
@@ -30,37 +31,23 @@ function normalizeSteps(steps) {
 
 // CREATE a new recipe
 exports.createRecipe = async (req, res) => {
-  try {
-    const {
-      title,
-      description,
-      cookingTime,
-      ingredients,
-      instructions,
-      image
-    } = req.body;
-    const cleanInstructions = normalizeSteps(instructions);
-    const recipe = await Recipe.create({
-      title,
-      description,
-      cookingTime,
-      ingredients,
-      instructions: cleanInstructions,
-      image,
-      authorId: req.user.id
-    });
+  // req.body is already validated & stripped by validateBody
+  const {
+    title, description, cookingTime,
+    ingredients, instructions, image
+  } = req.body;
 
-    return res.status(201).json(recipe);
-  } catch (err) {
-    console.error('Error creating recipe:', err);
-    if (err.message.includes('Instructions must be') ||
-        err.message.includes('Each step') ||
-        err.message.includes('At least one') ||
-        err.name === 'ValidationError') {
-      return res.status(400).json({ message: err.message });
-    }
-    return res.status(500).json({ message: 'Server error creating recipe' });
-  }
+  const cleanInstructions = normalizeSteps(instructions);
+  const recipe = await Recipe.create({
+    title, description,
+    cookingTime,
+    ingredients,
+    instructions: cleanInstructions,
+    image,
+    authorId: req.user.id
+  });
+
+  return res.status(201).json(recipe);
 };
 
 // GET all recipes with optional title/ingredient filters + pagination
@@ -119,31 +106,29 @@ exports.getRecipes = async (req, res) => {
 };
 
 // GET single recipe by ID
-exports.getRecipeById = async (req, res, next) => {
-  try {
-    const recipe = await Recipe.findById(req.params.id)
-      .populate('authorId', 'name')
-      .populate({
-        path: 'comments',
-        options: { sort: { createdAt: -1 } },
-        populate: { path: 'authorId', select: 'name' }
-      })
-      .populate('likeCount')
-      .lean({ virtuals: true });
+exports.getRecipeById = catchAsync(async (req, res) => {
+  const recipe = await Recipe.findById(req.params.id)
+    .populate('authorId', 'name')
+    .populate({
+      path: 'comments',
+      options: { sort: { createdAt: -1 } },
+      populate: { path: 'authorId', select: 'name' }
+    })
+    .populate('likeCount')
+    .lean({ virtuals: true });
 
-    if (!recipe) return res.sendStatus(404);
-    // fix comment.authorId → comment.author
-    recipe.comments = recipe.comments.map(c => {
-      c.author = c.authorId;
-      delete c.authorId;
-      return c;
-    });
-
-    return res.json(recipe);
-  } catch (err) {
-    next(err);
+  if (!recipe) {
+    throw new ApiError(404, 'Recipe not found');
   }
-};
+
+  recipe.comments = recipe.comments.map((c) => {
+    c.author = c.authorId;
+    delete c.authorId;
+    return c;
+  });
+
+  res.json(recipe);
+});
 
 // UPDATE a recipe (only by its author)
 exports.updateRecipe = async (req, res) => {

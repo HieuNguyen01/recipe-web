@@ -1,14 +1,22 @@
 // routes/users.js
+const express           = require('express');
+const auth              = require('../middleware/auth');
+const catchAsync    = require('../utils/catchAsync');
+const { getMe, getAllUsers } = require('../controllers/userController');
 
-const express      = require('express');
-const auth = require('../middleware/auth');
-const ctrl         = require('../controllers/userController');
-const router       = express.Router();
+const router = express.Router();
 
-router.get('/',             ctrl.getAllUsers);
-router.get('/me',           auth, ctrl.getMe);
-router.get('/:id',          ctrl.getUserById);
-// router.get('/:id/likes',    ctrl.getLikes);
-// router.get('/:id/comments', ctrl.getComments);
+// Get currently authenticated user
+router.get('/me', auth, catchAsync(getMe));
+
+// List all users
+router.get('/', catchAsync(getAllUsers));
+
+// Get a specific user
+// router.get(
+//   '/:id',
+//   validateObjectId('id'),
+//   catchAsync(getUserById)
+// );
 
 module.exports = router;

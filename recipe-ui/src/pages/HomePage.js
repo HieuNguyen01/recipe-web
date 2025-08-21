@@ -16,10 +16,11 @@ import EditIcon from "@mui/icons-material/Edit";
 import FileCopyIcon from "@mui/icons-material/FileCopy";
 import ArchiveIcon from "@mui/icons-material/Archive";
 import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
-import ConfirmDialog from "ui/dialogs/ConfirmDialog";
+import useConfirmDialog from "ui/hooks/useConfirmDialog";
 
 
 import { getMe, getRecipes, login, register, setAuthToken, updateRecipe, uploadAvatar } from "services/api";
+import { BorderColorOutlined, Opacity } from "@mui/icons-material";
 
 const defaultEditData = {
   id: "",
@@ -87,7 +88,6 @@ export default function HomePage() {
   const [editOpen, setEditOpen] = useState(false);
   const [editData, setEditData] = useState(defaultEditData);
   const [editError, setEditError] = useState("");
-  const [confirmOpen, setConfirmOpen] = useState(false);
 
   // full data set from server
   const [allRecipes, setAllRecipes] = useState([]);
@@ -113,6 +113,8 @@ export default function HomePage() {
   const [uploadError, setUploadError] = useState("");
 
   const { enqueueSnackbar } = useSnackbar();
+  const {openConfirm, ConfirmDialogRender } = useConfirmDialog();
+  
 
   //initial load
   useEffect(() => {
@@ -157,7 +159,7 @@ export default function HomePage() {
         .catch(err => console.error("Fetch error:", err));
     }, 500);
     return () => clearTimeout(handler);
-  }, [searchTerm]);
+  }, [searchTerm,authTokenState]);
 
   // filter by searchTerm tokens
   const filteredRecipes = useMemo(() => {
@@ -216,14 +218,6 @@ export default function HomePage() {
       if (callback) callback();
     }, 1000);
   };
-
-  const handleSaveClick = () => {
-    setConfirmOpen(true);
-  };
-
-  // const handleConfirmClose = () => {
-  //   setConfirmOpen(false);
-  // };
 
   // LOGIN
   const handleLoginSubmit = async (e) => {
@@ -446,9 +440,8 @@ export default function HomePage() {
       setEditError(err.response?.data?.message || "Save failed");
     }
   };
-  // Wrapper that shows toasts
+
   const handleConfirmSave = async () => {
-    setConfirmOpen(false);
     try {
       await handleEditSave();
       enqueueSnackbar('Recipe saved successfully', { variant: 'success' });
@@ -887,7 +880,6 @@ export default function HomePage() {
           <MKInput
             name="cookingTime"
             label="Cooking Time (min)"
-            type="number"
             value={editData?.cookingTime || ""}
             onChange={handleEditChange}
             fullWidth
@@ -973,27 +965,76 @@ export default function HomePage() {
 
         {/* Save / Cancel Buttons */}
         <DialogActions sx={{ p: 2 }}>
-          <MKButton fullWidth color="success" onClick={handleSaveClick}>
-            Save
+          <MKButton
+            fullWidth
+            color="success"
+            disabled={isUploading}
+            sx={{ position: "relative" }}
+            onClick={() =>
+              openConfirm({
+                title: "Confirm Edit",
+                contentText:
+                  "Are you sure you want to save changes to this recipe?",
+                confirmText: "Save",
+                cancelText: "Cancel",
+                confirmButtonProps: {
+                  variant: 'contained',
+                  sx: {
+                    backgroundColor: '#4caf50',
+                    color: '#fff',
+                    borderColor: '#4caf50',
+                    '&:hover': {
+                      opacity: 0.8,
+                      backgroundColor: '#4caf50',
+                      borderColor: '#4caf50',
+                      color: '#fff'
+
+                    }
+                  }
+                },
+                cancelButtonProps: {
+                  variant: 'outlined',
+                  sx: {
+                    backgroundColor: '#fff',
+                    color: '#7b809a',
+                    borderColor: '#7b809a',
+                    '&:hover': {
+                      opacity: 0.8,
+                      backgroundColor: '#7b809a',
+                      borderColor: '#7b809a',
+                      color: '#fff'
+                    },
+                  }
+                },
+                onConfirm: handleConfirmSave,
+              })
+            }
+          >
+            {isUploading ? (
+              <CircularProgress size={20} color="inherit" />
+            ) : (
+              "Save"
+            )}
           </MKButton>
-          <MKButton fullWidth variant="outlined" color="secondary" onClick={handleEditClose}>
+          <MKButton
+            onClick={handleEditClose}
+            fullWidth
+            variant="outlined"
+            color="secondary"
+            sx={{
+              '&:hover': {
+                backgroundColor: '#7b809a',
+                borderColor: '#7b809a',
+                color: '#fff'
+              }
+            }}
+          >
             Cancel
           </MKButton>
         </DialogActions>
       </BootstrapDialog>
-      {/* ─── Full-Screen Confirm Dialog ─── */}
-      <ConfirmDialog
-        open={confirmOpen}
-        title="Confirm Edit"
-        contentText="Are you sure you want to save changes to this recipe?"
-        cancelText="Cancel"
-        confirmText="Save"
-        onClose={() => setConfirmOpen(false)}
-        onConfirm={() => {
-          setConfirmOpen(false);
-          handleConfirmSave();
-        }}
-      />
+      {/* ─── Confirm Edit Dialog ─── */}
+      <ConfirmDialogRender />
     </>
   );
 }

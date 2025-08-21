@@ -1,10 +1,17 @@
-const express = require('express');
+const router = require('express').Router();
 const { register, login } = require('../controllers/authController');
-const router = express.Router();
+const validateBody = require('../middleware/validateBody');
+const { registerSchema, loginSchema } = require('../validation/auth');
+const catchAsync = require('../utils/catchAsync');
 
-// POST /api/auth/register
-router.post('/register', register);
-// POST /api/auth/login
-router.post('/login', login);
+router.post('/register',
+  validateBody(registerSchema),
+  catchAsync(register)
+);
+
+router.post('/login',
+  validateBody(loginSchema),
+  catchAsync(login)
+);
 
 module.exports = router;

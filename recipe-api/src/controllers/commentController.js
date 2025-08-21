@@ -1,102 +1,100 @@
 const Comment = require('../models/Comment');
 const Recipe = require('../models/Recipe');
-const { success, error } = require('../utils/response');
+const ApiError  = require('../utils/ApiError');
+const catchAsync = require('../utils/catchAsync');
 
-exports.addComment = async (req, res, next) => {
+/**
+ * POST /api/recipe/:id/comments
+ */
+exports.addComment = catchAsync(async (req, res) => {
   const authorId = req.user.id;
   const recipeId = req.params.id;
   const { content } = req.body;
 
-  try {
-    // Ensure recipe exists
-    const recipe = await Recipe.findById(recipeId);
-    if (!recipe) {
-      return error(res, 404, 'Recipe not found', 'RECIPE_NOT_FOUND');
-    }
-
-    // Create the comment
-    let comment = await Comment.create({
-      authorId,
-      recipe: recipeId,
-      content: content.trim(),
-    });
-
-    // Populate authorId → { _id, name } and convert to POJO
-    comment = await comment.populate('authorId', 'name');
-    comment = comment.toObject();
-
-    comment.author = comment.authorId;
-    delete comment.authorId;
-    // Return the new comment under a clear key
-    return success(res, 'Comment added', comment);
-  } catch (err) {
-    console.error('addComment error:', err);
-    return error(res, 500, 'Server error adding comment');
+  // Ensure recipe exists
+  const recipe = await Recipe.findById(recipeId);
+  if (!recipe) {
+    throw new ApiError(404, 'Recipe not found', { recipe: 'Recipe not found' });
   }
-};
 
-exports.updateComment = async (req, res) => {
-  const authorId = req.user.id;
-  const { recipeId, commentId } = req.params;
-  const trimmed = req.body.content.trim();
+  // Create and populate the new comment
+  let comment = await Comment.create({
+    authorId,
+    recipe:   recipeId,
+    content:  content.trim(),
+  });
 
-  try {
-    // fetch
-    const comment = await Comment.findById(commentId);
-    if (!comment || comment.recipe.toString() !== recipeId) {
-      return error(res, 404, 'Comment not found', 'COMMENT_NOT_FOUND');
-    }
+  comment = await comment.populate('authorId', 'name');
+  comment = comment.toObject();
 
-    // authorize
-    if (comment.author.toString() !== authorId) {
-      return error(res, 403, 'Not allowed to edit this comment', 'UNAUTHORIZED_COMMENT');
-    }
+  // Rename authorId → author
+  comment.author = comment.authorId;
+  delete comment.authorId;
 
-    // save
-    comment.content = trimmed;
-    comment.updatedAt = Date.now();
-    await comment.save();
+  // 201 Created
+  res.status(201).json(comment);
+});
 
-    await comment.populate('author', 'name');
-    return success(res, 'Comment updated', comment);
-  } catch (err) {
-    console.error('updateComment error:', err);
-    return error(res, 500, 'Server error updating comment');
-  }
-};
+/**
+ * GET /api/recipe/:id/comments
+ */
+exports.getAllComments = catchAsync(async (req, res) => {
+  const recipeId = req.params.id;
+
+  const comments = await Comment.find({ recipe: recipeId })
+    .populate('author', 'name')
+    .sort({ createdAt: -1 });
+
+  res.json(comments);
+});
 
 
-exports.getAllComments = async (req, res) => {
-  const { recipeId } = req.params;
-  try {
-    const comments = await Comment
-      .find({ recipe: recipeId })
-      .populate('author', 'name')
-      .sort({ createdAt: -1 });
+// exports.updateComment = async (req, res) => {
+//   const authorId = req.user.id;
+//   const { recipeId, commentId } = req.params;
+//   const trimmed = req.body.content.trim();
 
-    return success(res, 'Comments fetched', comments);
-  } catch (err) {
-    console.error('getAllComments error:', err);
-    return error(res, 500, 'Server error fetching comments');
-  }
-};
+//   try {
+//     // fetch
+//     const comment = await Comment.findById(commentId);
+//     if (!comment || comment.recipe.toString() !== recipeId) {
+//       return error(res, 404, 'Comment not found', 'COMMENT_NOT_FOUND');
+//     }
 
-exports.deleteComment = async (req, res) => {
-  const authorId = req.user.id;
-  const { recipeId, commentId } = req.params;
+//     // authorize
+//     if (comment.author.toString() !== authorId) {
+//       return error(res, 403, 'Not allowed to edit this comment', 'UNAUTHORIZED_COMMENT');
+//     }
 
-  try {
-    const comment = await Comment.findById(commentId);
-    if (!comment || comment.recipe.toString() !== recipeId) {
-      return error(res, 404, 'Comment not found', 'COMMENT_NOT_FOUND');
-    }
-    if (comment.author.toString() !== authorId) {
-      return error(res, 403, 'Not allowed to delete this comment', 'UNAUTHORIZED_COMMENT');
-    }
-    await comment.deleteOne();
-    return success(res, 'Comment deleted');
-  } catch (err) {
-    console.error('Error deleting comment:', err);
-    return error(res, 500, 'Server error deleting comment');
-  }
-};
+//     // save
+//     comment.content = trimmed;
+//     comment.updatedAt = Date.now();
+//     await comment.save();
+
+//     await comment.populate('author', 'name');
+//     return success(res, 'Comment updated', comment);
+//   } catch (err) {
+//     console.error('updateComment error:', err);
+//     return error(res, 500, 'Server error updating comment');
+//   }
+// };
+
+// exports.deleteComment = async (req, res) => {
+//   const authorId = req.user.id;
+//   const { recipeId, commentId } = req.params;
+
+//   try {
+//     const comment = await Comment.findById(commentId);
+//     if (!comment || comment.recipe.toString() !== recipeId) {
+//       return error(res, 404, 'Comment not found', 'COMMENT_NOT_FOUND');
+//     }
+//     if (comment.author.toString() !== authorId) {
+//       return error(res, 403, 'Not allowed to delete this comment', 'UNAUTHORIZED_COMMENT');
+//     }
+//     await comment.deleteOne();
+//     return success(res, 'Comment deleted');
+//   } catch (err) {
+//     console.error('Error deleting comment:', err);
+//     return error(res, 500, 'Server error deleting comment');
+//   }
+// };

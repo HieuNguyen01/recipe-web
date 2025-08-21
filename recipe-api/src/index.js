@@ -6,6 +6,7 @@ const path    = require('path');
 const fs      = require('fs');
 const listEndpoints = require('express-list-endpoints');
 const connectDB     = require('./config/db');
+const errorHandler   = require('./middleware/errorHandler');
 const authRoutes    = require('./routes/auth');
 const recipesRoutes = require('./routes/recipe');
 const usersRoutes   = require('./routes/user');
@@ -30,11 +31,8 @@ app.use('/api/auth', authRoutes);
 app.use('/api/recipe', recipesRoutes);
 app.use('/api/user', usersRoutes);
 
-// Global error handler
-app.use((err, req, res, next) => {
-  console.error(err.stack);
-  res.status(500).json({ error: 'Something went wrong!' });
-});
+// Centralized error handler
+app.use(errorHandler);
 
 // Start server when run directly
 if (require.main === module) {
