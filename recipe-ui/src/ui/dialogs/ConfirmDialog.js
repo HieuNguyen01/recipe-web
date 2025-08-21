@@ -11,31 +11,36 @@ import {
 } from "@mui/material";
 import { useTheme } from "@mui/material/styles";
 
-const Transition = React.forwardRef((props, ref) => (
-  <Slide direction="up" ref={ref} {...props} />
-));
+const Transition = React.forwardRef(function Transition(props, ref) {
+  return <Slide direction="up" ref={ref} {...props} />;
+});
 
 /**
+ * A reusable confirmation dialog.
+ *
  * Props:
- *  - open           Boolean
- *  - title          String
- *  - contentText    String (optional) or use children for custom content
- *  - onClose        Function
- *  - onConfirm      Function
- *  - cancelText     String (default: "Cancel")
- *  - confirmText    String (default: "Confirm")
+ *   open                Boolean
+ *   title               String
+ *   contentText         String
+ *   onClose             () => void
+ *   onConfirm           () => void
+ *   cancelText          String (default: "Cancel")
+ *   confirmText         String (default: "Confirm")
+ *   cancelButtonProps   Object props spread onto the Cancel <Button>
+ *   confirmButtonProps  Object props spread onto the Confirm <Button>
  */
-export default function ConfirmDialog({
+function ConfirmDialog({
   open,
   title,
   contentText,
-  children,
   onClose,
   onConfirm,
   cancelText = "Cancel",
   confirmText = "Confirm",
+  cancelButtonProps = {},
+  confirmButtonProps = {},
 }) {
-  const theme      = useTheme();
+  const theme = useTheme();
   const fullScreen = useMediaQuery(theme.breakpoints.down("md"));
 
   return (
@@ -48,16 +53,18 @@ export default function ConfirmDialog({
     >
       <DialogTitle id="confirm-dialog-title">{title}</DialogTitle>
       <DialogContent>
-        {contentText
-          ? <DialogContentText>{contentText}</DialogContentText>
-          : children}
+          <DialogContentText>{contentText}</DialogContentText>
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose}>{cancelText}</Button>
-        <Button variant="contained" color="primary" onClick={onConfirm}>
+        <Button onClick={onClose} {...cancelButtonProps}>
+          {cancelText}
+        </Button>
+        <Button onClick={onConfirm} {...confirmButtonProps}>
           {confirmText}
         </Button>
       </DialogActions>
     </Dialog>
   );
 }
+
+export default React.memo(ConfirmDialog);

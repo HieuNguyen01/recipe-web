@@ -1,57 +1,58 @@
 import React, { useState, useCallback } from "react";
 import ConfirmDialog from "ui/dialogs/ConfirmDialog";
 
-/**
- * useConfirmDialog
- * Returns:
- *   - openConfirm(opts): opens the dialog with opts
- *   - ConfirmDialogRenderer: a component you place at the root of your page/Tree
- *
- * opts = {
- *   title:       string,
- *   contentText: string,
- *   confirmText: string,
- *   cancelText:  string,
- *   onConfirm:   () => void
- * }
- */
 export default function useConfirmDialog() {
-  const [options, setOptions] = useState({
+  const [opts, setOpts] = useState({
     open: false,
     title: "",
     contentText: "",
-    confirmText: "Confirm",
     cancelText: "Cancel",
+    confirmText: "Confirm",
+    cancelButtonProps: {},
+    confirmButtonProps: {},
     onConfirm: () => {},
   });
 
-  const openConfirm = useCallback((opts) => {
-    setOptions({ open: true, ...opts });
+  const openConfirm = useCallback((options) => {
+    setOpts({ open: true, ...options });
   }, []);
 
   const closeConfirm = useCallback(() => {
-    setOptions((o) => ({ ...o, open: false }));
+    setOpts((o) => ({ ...o, open: false }));
   }, []);
 
-  // The renderer you drop into your JSX
-  function ConfirmDialogRender() {
-    const { open, title, contentText, cancelText, confirmText, onConfirm } = options;
+  const ConfirmDialogRender = useCallback(() => {
+    const {
+      open,
+      title,
+      contentText,
+      cancelText,
+      confirmText,
+      cancelButtonProps,
+      confirmButtonProps,
+      onConfirm,
+    } = opts;
+
+    const handleConfirm = () => {
+      closeConfirm();
+      onConfirm();
+    };
 
     return (
       <ConfirmDialog
         open={open}
         title={title}
         contentText={contentText}
+        onClose={closeConfirm}
+        onConfirm={handleConfirm}
         cancelText={cancelText}
         confirmText={confirmText}
-        onClose={closeConfirm}
-        onConfirm={() => {
-          closeConfirm();
-          onConfirm();
-        }}
-      />
+        cancelButtonProps={cancelButtonProps}
+        confirmButtonProps={confirmButtonProps}
+      >
+      </ConfirmDialog>
     );
-  }
+  }, [opts, closeConfirm]);
 
   return { openConfirm, ConfirmDialogRender };
 }
