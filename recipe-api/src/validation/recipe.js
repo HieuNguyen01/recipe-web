@@ -22,13 +22,7 @@ const createRecipeSchema = Yup.object({
                   .min(1, 'At least one ingredient is required'),
   instructions: Yup.array()
                   .of(Yup.string().required('Instruction step is required'))
-                  .min(1, 'At least one instruction step is required'),
-  image:        Yup.string()
-                  .matches(
-                    /^data:image\/(png|jpeg|jpg|gif);base64,/,
-                    'Image must be a valid data URI'
-                  )
-                  .optional()
+                  .min(1, 'At least one instruction step is required')
 });
 
 const updateRecipeSchema = createRecipeSchema

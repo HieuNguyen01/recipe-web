@@ -8,7 +8,7 @@ const ratingSchema = new Schema({
     ref: 'User',
     required: true
   },
-  recipe: {
+  recipeId: {
     type: Schema.Types.ObjectId,
     ref: 'Recipe',
     required: true
@@ -16,8 +16,12 @@ const ratingSchema = new Schema({
   value: {
     type: Number,
     required: true,
-    min: 1,
-    max: 5
+    min: 0.5,
+    max: 5,
+    validate: {
+      validator: v => (v * 2) % 1 === 0,
+      message: 'Rating must be in 0.5 increments'
+    }
   }
 },
 {
@@ -25,6 +29,6 @@ const ratingSchema = new Schema({
 });
 
 // Ensure one rating per user per recipe
-ratingSchema.index({ user: 1, recipe: 1 }, { unique: true });
+ratingSchema.index({ user: 1, recipeId: 1 }, { unique: true });
 
 module.exports = mongoose.model('Rating', ratingSchema);

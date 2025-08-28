@@ -13,8 +13,8 @@ const usersRoutes   = require('./routes/user');
 
 const app = express();
 
-const AVATAR_DIR = path.join(__dirname, 'app/storage/avatar');
-fs.mkdirSync(AVATAR_DIR, { recursive: true });
+const IMG_DIR = path.join(__dirname, 'app/storage/avatar');
+fs.mkdirSync(IMG_DIR, { recursive: true });
 
 app.use(cors({
   origin: 'http://localhost:3000',

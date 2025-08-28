@@ -1,10 +1,7 @@
 const mongoose = require('mongoose');
 const { ObjectId } = mongoose.mongo;
-const fs     = require('fs');
-const path   = require('path');
 const Recipe = require('../models/Recipe');
 const Rating = require('../models/Rating');
-const Like   = require('../models/Like');
 const ApiError  = require('../utils/ApiError');
 const catchAsync = require('../utils/catchAsync');
 
@@ -51,7 +48,6 @@ exports.createRecipe = async (req, res) => {
 };
 
 // GET all recipes with optional title/ingredient filters + pagination
-// controllers/recipeController.js
 exports.getRecipes = async (req, res) => {
   try {
     // extract only the search params
@@ -63,8 +59,8 @@ exports.getRecipes = async (req, res) => {
     if (searchTerm) {
       const tokens = searchTerm.split(/\s+/);
       filter.$or = tokens.flatMap(token => [
-        { title:            { $regex: token,            $options: 'i' } },
-        { 'ingredients.name': { $regex: token,          $options: 'i' } }
+        { title: { $regex: token, $options: 'i' } },
+        { 'ingredients.name': { $regex: token, $options: 'i' } }
       ]);
     }
 
@@ -114,260 +110,68 @@ exports.getRecipeById = catchAsync(async (req, res) => {
       options: { sort: { createdAt: -1 } },
       populate: { path: 'authorId', select: 'name' }
     })
-    .populate('likeCount')
-    .lean({ virtuals: true });
-
+    .populate('likeCount');
   if (!recipe) {
     throw new ApiError(404, 'Recipe not found');
   }
-
-  recipe.comments = recipe.comments.map((c) => {
+  // calls schema.toObject() + cleanIds transform
+  const clean = recipe.toObject(); 
+  clean.comments = clean.comments.map((c) => {
     c.author = c.authorId;
     delete c.authorId;
     return c;
   });
 
-  res.json(recipe);
+  res.json(clean);
 });
 
 // UPDATE a recipe (only by its author)
-exports.updateRecipe = async (req, res) => {
-  try {
-    const {
-      title,
-      description,
-      cookingTime,
-      ingredients,
-      instructions,
-      image
-    } = req.body;
+exports.updateRecipe = catchAsync(async (req, res) => {
+  const { id } = req.params;
+  const userId = req.user.id;
 
-    let updates = { title, description, cookingTime, ingredients };
-
-    if (typeof instructions !== 'undefined') {
-      updates.instructions = normalizeSteps(instructions);
-    }
-    if (typeof image !== 'undefined') {
-      updates.image = image;
-    }
-
-    const recipe = await Recipe.findOneAndUpdate(
-      { _id: req.params.id, authorId: req.user.id },
-      updates,
-      { new: true, runValidators: true }
-    );
-
-    if (!recipe) {
-      return res
-        .status(404)
-        .json({ message: 'Recipe not found or you are unauthorized' });
-    }
-    return res.json(recipe);
-  } catch (err) {
-    console.error(`Error updating recipe ${req.params.id}:`, err);
-    if (err.message.includes('Instructions must be') ||
-        err.message.includes('Each step') ||
-        err.message.includes('At least one') ||
-        err.name === 'ValidationError') {
-      return res.status(400).json({ message: err.message });
-    }
-    return res.status(500).json({ message: 'Server error updating recipe' });
+  // 1) Existence check
+  const recipe = await Recipe.findById(id);
+  if (!recipe) {
+    throw new ApiError(404, 'Recipe not found');
   }
-};
+
+  // 2) Authorization check
+  if (recipe.authorId.toString() !== userId) {
+    throw new ApiError(403, 'You are not allowed to edit this recipe');
+  }
+
+  // 3) Apply only the fields that came in
+  const { title, description, cookingTime, ingredients, instructions, image } = req.body;
+  if (title       !== undefined) recipe.title       = title;
+  if (description !== undefined) recipe.description = description;
+  if (cookingTime !== undefined) recipe.cookingTime = cookingTime;
+  if (ingredients !== undefined) recipe.ingredients = ingredients;
+  if (instructions !== undefined) recipe.instructions = normalizeSteps(instructions);
+  if (image       !== undefined) recipe.image       = image;
+
+  // 4) Save
+  await recipe.save();
+  res.json(recipe);
+});
 
 // DELETE a recipe (only by its author)
-exports.deleteRecipe = async (req, res) => {
-  try {
-    const recipe = await Recipe.findOneAndDelete({
-      _id: req.params.id,
-      authorId: req.user.id
-    });
+exports.deleteRecipe = catchAsync(async (req, res) => {
+  const { id } = req.params;
+  const userId = req.user.id;
 
-    if (!recipe) {
-      return res
-        .status(404)
-        .json({ message: 'Recipe not found or you are unauthorized' });
-    }
-    res.json({ message: 'Recipe deleted' });
-  } catch (err) {
-    console.error(`Error deleting recipe ${req.params.id}:`, err);
-    res.status(500).json({ message: 'Server error deleting recipe' });
-  }
-};
-
-/**
- * POST  /api/recipes/:id/rate
- * Private – upsert a rating (1–5), recalc avg & count
- */
-exports.rateRecipe = async (req, res) => {
-  const { id: recipeId } = req.params;
-  const { value }        = req.body;
-
-  if (typeof value !== 'number' || value < 1 || value > 5) {
-    return res.status(400).json({ message: 'Rating must be a number between 1 and 5' });
+  // 1) Existence check
+  const recipe = await Recipe.findById(id);
+  if (!recipe) {
+    throw new ApiError(404, 'Recipe not found');
   }
 
-  try {
-    // Upsert the user’s rating
-    await Rating.findOneAndUpdate(
-      { user: req.user.id, recipe: new ObjectId(recipeId) },
-      { value },
-      { upsert: true, new: true, setDefaultsOnInsert: true }
-    );
-
-    // Recalculate stats
-    const agg = await Rating.aggregate([
-      { $match: { recipe: new ObjectId(recipeId) } },
-      {
-        $group: {
-          _id: '$recipe',
-          count: { $sum: 1 },
-          avg:   { $avg: '$value' }
-        }
-      }
-    ]);
-
-    const { count = 0, avg = 0 } = agg[0] || {};
-
-    // Update Recipe doc
-    await Recipe.findByIdAndUpdate(recipeId, {
-      ratingCount: count,
-      averageRating: avg
-    });
-
-    return res.json({
-      ratingCount: count,
-      averageRating: avg
-    });
-  } catch (err) {
-    console.error('rateRecipe error:', err);
-    return res.status(500).json({ message: 'Server error rating recipe' });
+  // 2) Authorization check
+  if (recipe.authorId.toString() !== userId) {
+    throw new ApiError(403, 'You are not allowed to delete this recipe');
   }
-};
 
-/**
- * POST  /api/recipes/:id/like
- * Private – toggle a like, recalc total likes
- */
-exports.likeRecipe = async (req, res) => {
-  const recipeId = req.params.id;
-  try {
-    // Try to remove existing like
-    const removed = await Like.findOneAndDelete({
-      user: req.user.id,
-      recipe: recipeId
-    });
-
-    let liked;
-    if (removed) {
-      liked = false;
-    } else {
-      // Create a new like
-      await Like.create({ user: req.user.id, recipe: recipeId });
-      liked = true;
-    }
-
-    return res.json({ liked, likeCount: await Like.countDocuments({ recipe: recipeId }) });
-
-  } catch (err) {
-    console.error('likeRecipe error:', err);
-    return res.status(500).json({ message: 'Server error toggling like' });
-  }
-};
-
-// helper to pull out the real base64 payload
-function toBuffer(image) {
-  // If it’s a data URI, strip the prefix
-  const match = image.match(/^data:(.+);base64,(.*)$/);
-  const payload = match ? match[2] : image;
-
-  // Ensure it’s valid Base64 (simple check)
-  if (!/^[A-Za-z0-9+/=]+\s*$/.test(payload)) {
-    throw new Error('Invalid Base64 payload');
-  }
-  return Buffer.from(payload, 'base64');
-}
-
-// POST /api/recipe/:id/avatar
-exports.createAvatar = async (req, res) => {
-  try {
-    // Fetch + authorize
-    const recipe = await Recipe.findById(req.params.id);
-    if (!recipe) {
-      return res.status(404).json({ message: 'Recipe not found' });
-    }
-    if (recipe.authorId.toString() !== req.user.id) {
-      return res.status(403).json({ message: 'Forbidden' });
-    }
-
-    // Validate data-URI format
-    const { image } = req.body;
-    if (
-      typeof image !== 'string' ||
-      !image.startsWith('data:image/') ||
-      !image.includes(';base64,')
-    ) {
-      return res.status(400).json({ message: 'Invalid image data' });
-    }
-
-    // Parse out MIME + Base64 payload
-    const [meta, base64] = image.split(';base64,');
-    const mimeMatch = meta.match(/^data:(image\/[a-zA-Z0-9.+-]+)/);
-    if (!mimeMatch) {
-      return res.status(400).json({ message: 'Unsupported image MIME type' });
-    }
-    const mimeType = mimeMatch[1];                  // e.g. "image/png"
-    const ext      = mimeType.split('/')[1] === 'jpeg' 
-                     ? 'jpg' 
-                     : mimeType.split('/')[1];     // normalize "jpeg" → "jpg"
-
-    // Decode & write file
-    let buffer;
-    try {
-      buffer = Buffer.from(base64, 'base64');
-    } catch (err) {
-      return res.status(400).json({ message: 'Corrupt Base64 payload' });
-    }
-
-    const dir      = path.join(__dirname, '../../app/storage/avatar');
-    const filename = `${req.params.id}.${ext}`;
-    const filePath = path.join(dir, filename);
-
-    fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(filePath, buffer);
-
-    // Echo back the data-URI
-    return res.status(200).json({
-      message: 'Avatar uploaded',
-      avatar: image
-    });
-
-  } catch (err) {
-    console.error('Upload error:', err);
-    return res.status(500).json({ message: err.message });
-  }
-};
-
-// GET /api/recipe/:id/avatar
-// exports.getAvatar = async (req, res) => {
-//   try {
-//     // Build path to expected avatar
-//     const filePath = path.join( __dirname, '../../app/storage/avatar', `${req.params.id}.jpg`);
-
-//     if (!fs.existsSync(filePath)) {
-//       return res.status(404).json({ message: 'Avatar not found' });
-//     }
-
-//     // Read file, convert to Base64 and return as JSON
-//     const buffer = fs.readFileSync(filePath);
-//     const base64 = buffer.toString('base64');
-//     const dataUrl = `data:image/jpeg;base64,${base64}`;
-
-//     // Stream the file with correct header
-//     // res.setHeader('Content-Type', 'image/jpeg');
-//     return res.json({ avatar: dataUrl });
-//   } catch (err) {
-//     console.error('Error fetching avatar:', err);
-//     return res.status(500).json({ message: 'Server error fetching avatar' });
-//   }
-// };
+  // 3) Delete
+  await recipe.deleteOne();
+  res.status(204).end();
+});
