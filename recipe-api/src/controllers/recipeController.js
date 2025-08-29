@@ -70,7 +70,7 @@ exports.getRecipes = async (req, res) => {
       .sort({ createdAt: -1 });
 
     // map to response shape
-    const currentUserId = req.user?._id.toString();
+    const currentUserId = req.user?.id ?? null;
     const recipes = docs.map(doc => {
       const r = doc.toObject();
       return {
@@ -79,7 +79,7 @@ exports.getRecipes = async (req, res) => {
         image:        r.image,
         author:       r.authorId?.name || 'Unknown author',
         rating:       r.averageRating,
-        editable:     currentUserId === r.authorId?._id.toString(),
+        editable:     currentUserId === r.authorId?.id,
         description:  r.description,
         cookingTime:  r.cookingTime,
         ingredients:  r.ingredients,
