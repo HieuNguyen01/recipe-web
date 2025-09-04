@@ -18,6 +18,9 @@ import * as ReactDOMClient from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
 import App from "App";
 import { SnackbarProvider } from "notistack";
+import { AuthProvider } from "services/contexts/authContext";
+import { LoadingProvider } from "services/contexts/loadingContext";
+
 
 const container = document.getElementById("root");
 
@@ -31,7 +34,11 @@ root.render(
       autoHideDuration={1000}
       anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
     >
-      <App />
+      <AuthProvider>
+        <LoadingProvider>
+          <App />
+        </LoadingProvider>
+      </AuthProvider>
     </SnackbarProvider>
   </BrowserRouter>
 );
