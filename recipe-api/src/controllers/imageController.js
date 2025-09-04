@@ -33,6 +33,17 @@ exports.createImage = catchAsync(async (req, res) => {
   const filename = `${recipe.id}.${ext}`;
 
   await fs.promises.mkdir(dir, { recursive: true });
+
+  // Delete old avatar if it exists and is different from the new one
+  if (recipe.image && recipe.image !== filename) {
+    const oldPath = path.join(dir, recipe.image);
+    await fs.promises.unlink(oldPath)
+      .catch(err => {
+        // ignore "file not found" but bubble up others
+        if (err.code !== 'ENOENT') throw err;
+      });
+  }
+
   await fs.promises.writeFile(path.join(dir, filename), buffer);
 
   // Save filename in recipe.image

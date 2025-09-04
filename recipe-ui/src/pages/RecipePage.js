@@ -13,6 +13,7 @@ import MKInput from "components/MKInput";
 import { useSnackbar } from 'notistack';
 import { getRecipeById, updateRecipe, deleteRecipe, likeRecipe, commentRecipe, uploadAvatar } from "services/api";
 import useConfirmDialog from "ui/hooks/useConfirmDialog";
+import { useAuth } from "services/contexts/authContext";
 
 //RecipeCard layout
 const RecipeCard = styled(Card)(({ theme }) => ({
@@ -26,6 +27,8 @@ const RecipeCard = styled(Card)(({ theme }) => ({
 export default function RecipePage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { user, token } = useAuth();
+  const isAuthed = Boolean(token);
   const [recipe, setRecipe] = useState({
     _id: id,
     title: "",
@@ -37,12 +40,10 @@ export default function RecipePage() {
     likeCount: 0,
     liked: false,
     authorId: { _id: "", name: "" },
-    // …any other fields you render…
+    // other fields if needed
   });
   const [draft, setDraft] = useState({});
   const [editMode, setEditMode] = useState(false);
-  const [authToken, setAuthToken] = useState("");
-  const [userId, setUserId] = useState("");
   const [commentDialog, setCommentDialog] = useState(false);
   const [newComment, setNewComment] = useState("");
   const [isUploading, setIsUploading] = useState(false);
@@ -52,52 +53,29 @@ export default function RecipePage() {
   const { enqueueSnackbar } = useSnackbar();
   const { openConfirm, ConfirmDialogRender } = useConfirmDialog();
 
-
-
-  // Load auth data
-  useEffect(() => {
-    const token = sessionStorage.getItem('token');
-    const id = sessionStorage.getItem('userId');
-
-    if (token && id) {
-      setAuthToken(token);
-      setUserId(id);
-    }
-  }, []);
-
-
   // Fetch recipe
-  useEffect(() => {
-    getRecipeById(id)
-      .then((data) => {
-        setRecipe(prev => ({
-          ...prev,
-          ...data,
-          // fallback to existing if server didn’t send them
-          comments: data.comments ?? prev.comments,
-          likeCount: data.likeCount ?? prev.likeCount,
-          liked: data.liked ?? prev.liked,
-          ingredients: data.ingredients ?? prev.ingredients,
-          instructions: data.instructions ?? prev.instructions
-        }));
-        setDraft({
-          ...data,
-          author: data.authorId?.name || ""
-        });
-      })
-      .catch(console.error);
-  }, [id]);
+    useEffect(() => {
+      getRecipeById(id)
+        .then((data) => {
+          setRecipe(data);
+          setDraft({
+            ...data,
+            author: data.authorId?.name || ""
+          });
+        })
+        .catch(console.error);
+    }, [id]);
 
 
   if (!recipe) return <MKTypography>Loading...</MKTypography>;
 
-  const rawAuthorId = typeof recipe.authorId === 'string' ? recipe.authorId
-    : recipe.authorId?._id?.toString();
+  const rawAuthorId = recipe.authorId?.id;
 
-  console.log({ rawAuthorId, userId, authToken });
+  console.log({ rawAuthorId, user });
 
-  const isOwner = authToken && rawAuthorId === userId;
-  const isAuthed = Boolean(authToken);
+  // owner check via Context
+  const isOwner  = isAuthed && rawAuthorId === user?.id;
+
 
   // Handlers
   function handleFieldChange(e) {

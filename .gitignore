@@ -1,3 +1,9 @@
+# ignore all generated avatars
+/recipe-api/app/storage/avatar/*
+# keep the folder
+!/recipe-api/app/storage/avatar/.gitignore
+
+
 # Logs
 logs
 *.log
