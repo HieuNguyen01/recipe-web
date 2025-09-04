@@ -1,51 +1,34 @@
-//usercontroller
-const User = require('../models/User');
-const Like = require('../models/Like');
-const Comment = require('../models/Comment');
-const { success, error } = require('../utils/response');
+const User      = require('../models/User');
+const ApiError  = require('../utils/ApiError');
+const catchAsync = require('../utils/catchAsync');
 
 /**
- * GET /user
+ * GET /api/users
  */
-async function getAllUsers(req, res) {
-  try {
-    const users = await User.find().select('-password');
-    return success(res, 'Users fetched successfully', users);
-  } catch (err) {
-    console.error('getAllUsers error:', err);
-    return error(res, 500, 'Server error fetching users');
-  }
-}
+exports.getAllUsers = catchAsync(async (req, res) => {
+  const users = await User.find().select('-password');
+  // 200 OK
+  res.json(users);
+});
 
 /**
- * GET /user/:id
+ * GET /api/user/:id
  */
-async function getUserById(req, res) {
-  try {
-    const { id } = req.params;
-    const user = await User.findById(id).select('-password');
+exports.getUserById = catchAsync(async (req, res) => {
+  const { id } = req.params;
+  const user = await User.findById(id).select('-password');
 
-    if (!user) {
-      return error(res, 404, 'User not found', 'USER_NOT_FOUND');
-    }
-
-    return success(res, 'User fetched successfully', user);
-  } catch (err) {
-    console.error(`getUserById error (id=${req.params.id}):`, err);
-    return error(res, 500, 'Server error fetching user');
+  if (!user) {
+    throw new ApiError(404, 'User not found', { user: 'User not found' });
   }
-}
+
+  res.json(user);
+});
 
 /**
- * GET /user/me
+ * GET /api/user/me
  */
-async function getMe(req, res) {
-  try {
-    return success(res, 'Authenticated user fetched', req.user);
-  } catch (err) {
-    console.error('getMe error:', err);
-    return error(res, 500, 'Server error');
-  }
-}
-
-module.exports = { getAllUsers, getUserById, getMe };
+exports.getMe = catchAsync(async (req, res) => {
+  // req.user is already sanitized by auth middleware
+  res.json(req.user);
+});

@@ -1,43 +1,17 @@
 const express  = require('express');
 const mongoose = require('mongoose');
-const multer   = require('multer');
-const path     = require('path');
-const fs       = require('fs');
 const router   = express.Router();
 const auth     = require('../middleware/auth');
-const { createRecipe, getRecipes, getRecipeById, updateRecipe,
-  deleteRecipe, rateRecipe, likeRecipe, createAvatar, getAvatar
-} = require('../controllers/recipeController');
-const { addComment, getAllComments, updateComment, deleteComment } = require('../controllers/commentController');
 const optionalAuth  = require('../middleware/optionalAuth');
+const catchAsync    = require('../utils/catchAsync');
+const validateBody  = require('../middleware/validateBody');
+const { createRecipe, getRecipes, getRecipeById, updateRecipe,
+  deleteRecipe, rateRecipe, likeRecipe, createAvatar
+} = require('../controllers/recipeController');
+const { createRecipeSchema, updateRecipeSchema } = require('../validation/recipe');
+const { addComment, getAllComments } = require('../controllers/commentController');
+const { addCommentSchema } = require('../validation/comment');
 const  {validUnits} = require('../models/Recipe');
-
-// // ─── Multer configuration for avatars ────────────────────────────────
-// const AVATAR_DIR = path.join(__dirname, '../../app/storage/avatar');
-// const avatarStorage = multer.diskStorage({
-//    destination(req, file, cb) {
-//    // ensure folder exists
-//    fs.mkdirSync(AVATAR_DIR, { recursive: true });
-//    cb(null, AVATAR_DIR);
-//    },
-//    filename(req, file, cb) {
-//    // always save as {recipeId}.jpg
-//    cb(null, `${req.params.id}.jpg`);
-//    }
-// });
-
-// const avatarUpload = multer({
-//   storage: avatarStorage,
-//   limits: { fileSize: 2 * 1024 * 1024 }, // 2MB
-//   fileFilter(req, file, cb) {
-//     const allowed = ['image/jpeg', 'image/png', 'image/webp'];
-//     if (allowed.includes(file.mimetype)) {
-//       cb(null, true);
-//     } else {
-//         cb(new Error('Unsupported file type. Only JPG, PNG, WEBP allowed.'));
-//     }
-//   }
-// });
 
 
 /* ──────────────────────────────────────────── */
@@ -80,44 +54,66 @@ router.get("/units", (req, res) => {
  * Query params: title, ingredient, page, limit
  */
 //GET /api/recipe will run optionalAuth **before** getRecipes
-router.get('/', optionalAuth, getRecipes);
+router.get('/', optionalAuth, catchAsync(getRecipes));
 /**
  * GET /api/recipe/:id
  * Public – fetch a single recipe
  */
-router.get('/:id', validateObjectId('id'), getRecipeById);
+router.get('/:id', validateObjectId('id'), catchAsync(getRecipeById));
 // GET /api/units
 // router.get("/units", getValidUnits);
 /**
  * POST /api/recipe
  * Private – create a new recipe
  */
-router.post('/', auth, createRecipe);
+router.post('/',
+  auth,
+  validateBody(createRecipeSchema),
+  catchAsync(createRecipe)
+);
 /**
  * PUT /api/recipe/:id
  * Private – update a recipe (author only)
  */
-router.put('/:id', auth, validateObjectId('id'), updateRecipe);
+router.put('/:id',
+  auth,
+  validateObjectId('id'),
+  validateBody(updateRecipeSchema),
+  catchAsync(updateRecipe)
+);
+
 /**
  * DELETE /api/recipe/:id
  * Private – delete a recipe (author only)
  */
-router.delete('/:id', auth, validateObjectId('id'), deleteRecipe);
-
+router.delete('/:id',
+  auth,
+  validateObjectId('id'),
+  catchAsync(deleteRecipe)
+);
 // ── Rating & Like Endpoints ──────────────────
 
 /**
  * POST /api/recipe/:id/rate
  * Private – vote a 1–5 rating, returns { ratingCount, averageRating }
  */
-router.post('/:id/rate', auth, validateObjectId('id'), rateRecipe);
-
+router.post('/:id/rate',
+  auth,
+  validateObjectId('id'),
+  validateBody(
+    require('../validation/recipe').createRecipeSchema.pick(['value'])
+  ), // or build a tiny schema for { value: number().min(1).max(5) }
+  catchAsync(rateRecipe)
+);
 /**
  * POST /api/recipe/:id/like
  * Private – toggle a like, returns { liked, likeCount }
  */
-router.post('/:id/like', auth, validateObjectId('id'), likeRecipe);
-
+router.post('/:id/like',
+  auth,
+  validateObjectId('id'),
+  catchAsync(likeRecipe)
+);
 
 /* ──────────────────────────────────────────── */
 /*               COMMENT ROUTES                 */
@@ -141,41 +137,42 @@ router.post(
   '/:id/comments',
   auth,
   validateObjectId('id'),
-  validateCommentContent,
-  addComment
+  validateBody(addCommentSchema),
+  catchAsync(addComment)
 );
 
-/**
- * PUT /api/recipe/:recipeId/comments/:commentId
- * Private - update comment
- */
-router.put(
-  '/:id/comments/:commentId',
-  auth,
-  validateObjectId('id'),
-  validateCommentContent,
-  updateComment
-);
+// /**
+//  * PUT /api/recipe/:recipeId/comments/:commentId
+//  * Private - update comment
+//  */
+// router.put(
+//   '/:id/comments/:commentId',
+//   auth,
+//   validateObjectId('id'),
+//   validateCommentContent,
+//   updateComment
+// );
 
-/**
- * DELETE /api/recipe/:recipeId/comments/:commentId
- * Private – delete a comment
- */
-router.delete(
-  '/:id/comments/:commentId',
-  auth,
-  validateObjectId('id'),
-  validateObjectId('commentId'),
-  deleteComment
-);
+// /**
+//  * DELETE /api/recipe/:recipeId/comments/:commentId
+//  * Private – delete a comment
+//  */
+// router.delete(
+//   '/:id/comments/:commentId',
+//   auth,
+//   validateObjectId('id'),
+//   validateObjectId('commentId'),
+//   deleteComment
+// );
 
 // ── Recipe avatar endpoints ─────────────────────────────────────────────
-router.post(
-  '/:id/avatar',
+router.post('/:id/avatar',
   auth,
   validateObjectId('id'),
-  express.json(),      // parse JSON bodies
-  createAvatar
+  validateBody(
+    require('../validation/recipe').createRecipeSchema.pick(['image'])
+  ),
+  catchAsync(createAvatar)
 );
 
 // Fetch avatar
